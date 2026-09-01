@@ -129,6 +129,74 @@
     </div>
   </div>
 
+  <!-- ASSIGN RIDER MODAL -->
+<div
+  class="modal"
+  id="assign-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="assign-modal-title"
+>
+  <div class="modal-card assign-card">
+
+    <button
+      class="close"
+      onclick="closeAssignModal()"
+      aria-label="Close"
+    >
+      ×
+    </button>
+
+    <div class="modal-icon rider-modal-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M5 17h14"></path>
+        <path d="M7 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
+        <path d="M23 17a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
+        <path d="m7 17 3-8h5l3 8"></path>
+        <path d="M10 9 8 6h4"></path>
+      </svg>
+    </div>
+
+    <div class="eyebrow">
+      DISPATCH
+    </div>
+
+    <h2 id="assign-modal-title">
+      Assign rider
+    </h2>
+
+    <p class="modal-subtitle">
+      Choose an available rider for this delivery.
+    </p>
+
+    <div
+      id="assign-delivery-summary"
+      class="assign-delivery-summary"
+    ></div>
+
+    <div
+      id="assign-riders"
+      class="assign-riders"
+    ></div>
+
+    <div
+      id="assign-error"
+      class="assign-error"
+      style="display:none"
+    ></div>
+
+    <button
+      id="confirm-assign-btn"
+      class="primary submit-btn"
+      type="button"
+      disabled
+    >
+      Assign rider
+    </button>
+
+  </div>
+</div>
+
   <script src="/app.js"></script>
 </body>
 </html>
