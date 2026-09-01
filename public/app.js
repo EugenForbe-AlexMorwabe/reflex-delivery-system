@@ -1883,7 +1883,7 @@ function selectRider(
 ) {
 
   console.log(
-    'Selected rider:',
+    'RIDER SELECTED:',
     riderId
   );
 
@@ -1903,7 +1903,6 @@ function selectRider(
 
       button.style.borderColor =
         '#e5e7eb';
-
 
       button.style.background =
         '#fff';
@@ -1937,7 +1936,6 @@ function selectRider(
     element.style.borderColor =
       '#2563eb';
 
-
     element.style.background =
       '#eff6ff';
 
@@ -1964,25 +1962,36 @@ function selectRider(
   }
 
 
-  const button =
+  const confirmButton =
     document.getElementById(
       'confirm-assign-btn'
     );
 
 
-  if (button) {
+  if (confirmButton) {
 
-    button.disabled =
+    confirmButton.disabled =
       false;
 
-    button.style.cursor =
+    confirmButton.removeAttribute(
+      'disabled'
+    );
+
+    confirmButton.style.pointerEvents =
+      'auto';
+
+    confirmButton.style.cursor =
       'pointer';
 
   }
 
+
+  console.log(
+    'Selected rider ID:',
+    selectedRiderId
+  );
+
 }
-
-
 /* ======================================================
    CONFIRM ASSIGNMENT
 ====================================================== */
