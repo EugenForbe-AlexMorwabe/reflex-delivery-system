@@ -9,8 +9,18 @@ import { z } from 'zod';
 import { supabase } from './db.js';
 import { sendSms } from './sms.js';
 
+
+/* =========================================================
+   PATHS
+========================================================= */
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+
+/* =========================================================
+   EXPRESS
+========================================================= */
 
 const app = express();
 
@@ -31,7 +41,7 @@ app.use(
 
 
 /* =========================================================
-   CONSTANTS
+   DELIVERY STATUSES
 ========================================================= */
 
 const STATUS = {
@@ -48,37 +58,61 @@ const STATUS = {
 ========================================================= */
 
 const deliverySchema = z.object({
-  customer_name: z.string().trim().min(2),
-  customer_phone: z.string().trim().min(9),
-  delivery_address: z.string().trim().min(3),
-  item_description: z.string().trim().min(2),
+
+  customer_name: z
+    .string()
+    .trim()
+    .min(2),
+
+  customer_phone: z
+    .string()
+    .trim()
+    .min(9),
+
+  delivery_address: z
+    .string()
+    .trim()
+    .min(3),
+
+  item_description: z
+    .string()
+    .trim()
+    .min(2),
+
   retailer_name: z
     .string()
     .trim()
     .min(2)
     .default('Demo Retailer')
+
 });
 
 
 /* =========================================================
-   DELIVERY STATUS VALIDATION
+   STATUS VALIDATION
 ========================================================= */
 
 const statusSchema = z.object({
+
   status: z.enum([
     STATUS.PICKED_UP,
     STATUS.DELIVERED,
     STATUS.FAILED
   ]),
-  note: z.string().optional()
+
+  note: z
+    .string()
+    .optional()
+
 });
 
 
 /* =========================================================
-   GENERATE DELIVERY CODE
+   DELIVERY CODE GENERATOR
 ========================================================= */
 
 function generateDeliveryCode() {
+
   const timestamp =
     Date.now()
       .toString(36)
@@ -90,11 +124,12 @@ function generateDeliveryCode() {
     );
 
   return `RFX-${timestamp}-${random}`;
+
 }
 
 
 /* =========================================================
-   RECORD EVENT
+   RECORD DELIVERY EVENT
 ========================================================= */
 
 async function recordEvent(
@@ -103,21 +138,32 @@ async function recordEvent(
   source = 'dashboard',
   note = null
 ) {
+
   try {
-    const { error } = await supabase
-      .from('delivery_events')
-      .insert({
-        delivery_id: deliveryId,
-        status,
-        source,
-        note
-      });
+
+    const { error } =
+      await supabase
+        .from('delivery_events')
+        .insert({
+
+          delivery_id: deliveryId,
+
+          status: status,
+
+          source: source,
+
+          note: note
+
+        });
+
 
     if (error) {
+
       console.error(
         'EVENT RECORD ERROR:',
         error.message
       );
+
     }
 
     return { error };
@@ -130,12 +176,14 @@ async function recordEvent(
     );
 
     return { error };
+
   }
+
 }
 
 
 /* =========================================================
-   HEALTH
+   HEALTH CHECK
 ========================================================= */
 
 app.get(
@@ -143,9 +191,15 @@ app.get(
   (_req, res) => {
 
     res.json({
+
       ok: true,
+
       service: 'reflex',
-      time: new Date().toISOString()
+
+      time:
+        new Date()
+          .toISOString()
+
     });
 
   }
@@ -163,14 +217,18 @@ app.get(
     try {
 
       /*
-      IMPORTANT:
-
-      We only request columns that currently exist
-      in the riders table.
-
-      Do NOT add vehicle here unless you actually
-      create a vehicle column in Supabase.
-      */
+       * IMPORTANT:
+       *
+       * riders table contains:
+       *
+       * id
+       * name
+       * phone
+       * status
+       *
+       * There is NO vehicle column.
+       * There is NO is_available column.
+       */
 
       const deliveriesPromise =
         supabase
@@ -181,8 +239,7 @@ app.get(
               id,
               name,
               phone,
-              status,
-              is_available
+              status
             )
           `)
           .order(
@@ -200,8 +257,7 @@ app.get(
             id,
             name,
             phone,
-            status,
-            is_available
+            status
           `)
           .order(
             'name',
@@ -214,96 +270,126 @@ app.get(
       const [
         deliveriesResult,
         ridersResult
-      ] = await Promise.all([
-        deliveriesPromise,
-        ridersPromise
-      ]);
+      ] =
+        await Promise.all([
+          deliveriesPromise,
+          ridersPromise
+        ]);
 
 
-      const {
-        data: deliveries,
-        error: deliveriesError
-      } = deliveriesResult;
+      /* -----------------------------------------
+         DELIVERY ERROR
+      ----------------------------------------- */
 
-
-      const {
-        data: riders,
-        error: ridersError
-      } = ridersResult;
-
-
-      if (deliveriesError) {
+      if (
+        deliveriesResult.error
+      ) {
 
         console.error(
           'DELIVERIES QUERY ERROR:',
-          deliveriesError
+          deliveriesResult.error
         );
 
-        return res.status(500).json({
-          error: deliveriesError.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              deliveriesResult.error.message
+
+          });
 
       }
 
 
-      if (ridersError) {
+      /* -----------------------------------------
+         RIDER ERROR
+      ----------------------------------------- */
+
+      if (
+        ridersResult.error
+      ) {
 
         console.error(
           'RIDERS QUERY ERROR:',
-          ridersError
+          ridersResult.error
         );
 
-        return res.status(500).json({
-          error: ridersError.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              ridersResult.error.message
+
+          });
 
       }
 
 
-      const safeDeliveries =
-        Array.isArray(deliveries)
-          ? deliveries
-          : [];
+      const deliveries =
+        deliveriesResult.data || [];
 
 
-      const safeRiders =
-        Array.isArray(riders)
-          ? riders
-          : [];
+      const riders =
+        ridersResult.data || [];
 
 
-      /*
-      ---------------------------------------------
-      COUNT STATUSES
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         COUNTS
+      ----------------------------------------- */
 
-      const counts = {};
+      const counts = {
+
+        pending: 0,
+
+        assigned: 0,
+
+        picked_up: 0,
+
+        delivered: 0,
+
+        failed: 0
+
+      };
 
 
-      safeDeliveries.forEach(
+      deliveries.forEach(
         (delivery) => {
 
           const status =
-            delivery.status ||
-            STATUS.PENDING;
+            String(
+              delivery.status || ''
+            )
+              .trim()
+              .toLowerCase();
 
 
-          counts[status] =
-            (counts[status] || 0) + 1;
+          if (
+            Object.prototype
+              .hasOwnProperty
+              .call(
+                counts,
+                status
+              )
+          ) {
+
+            counts[status]++;
+
+          }
 
         }
       );
 
 
       console.log(
-        'Dashboard:',
+        'DASHBOARD:',
         {
           deliveries:
-            safeDeliveries.length,
+            deliveries.length,
 
           riders:
-            safeRiders.length,
+            riders.length,
 
           counts
         }
@@ -312,11 +398,9 @@ app.get(
 
       return res.json({
 
-        deliveries:
-          safeDeliveries,
+        deliveries,
 
-        riders:
-          safeRiders,
+        riders,
 
         counts
 
@@ -331,10 +415,14 @@ app.get(
       );
 
 
-      return res.status(500).json({
-        error:
-          'Unable to load dashboard'
-      });
+      return res
+        .status(500)
+        .json({
+
+          error:
+            'Unable to load dashboard'
+
+        });
 
     }
 
@@ -358,26 +446,48 @@ app.post(
         );
 
 
-      if (!parsed.success) {
+      if (
+        !parsed.success
+      ) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          error:
-            parsed.error.issues
-              .map(
-                issue =>
-                  issue.message
-              )
-              .join(', ')
+            error:
+              parsed.error.issues
+                .map(
+                  issue =>
+                    issue.message
+                )
+                .join(', ')
 
-        });
+          });
 
       }
 
 
       const payload = {
 
-        ...parsed.data,
+        retailer_name:
+          parsed.data
+            .retailer_name,
+
+        customer_name:
+          parsed.data
+            .customer_name,
+
+        customer_phone:
+          parsed.data
+            .customer_phone,
+
+        delivery_address:
+          parsed.data
+            .delivery_address,
+
+        item_description:
+          parsed.data
+            .item_description,
 
         delivery_code:
           generateDeliveryCode(),
@@ -413,9 +523,14 @@ app.post(
         );
 
 
-        return res.status(500).json({
-          error: error.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              error.message
+
+          });
 
       }
 
@@ -423,7 +538,8 @@ app.post(
       await recordEvent(
         data.id,
         STATUS.PENDING,
-        'dashboard'
+        'dashboard',
+        'Delivery created'
       );
 
 
@@ -440,10 +556,14 @@ app.post(
       );
 
 
-      return res.status(500).json({
-        error:
-          'Unable to create delivery'
-      });
+      return res
+        .status(500)
+        .json({
+
+          error:
+            'Unable to create delivery'
+
+        });
 
     }
 
@@ -463,8 +583,10 @@ app.post(
 
       const schema =
         z.object({
+
           rider_id:
             z.string().uuid()
+
         });
 
 
@@ -474,12 +596,18 @@ app.post(
         );
 
 
-      if (!parsed.success) {
+      if (
+        !parsed.success
+      ) {
 
-        return res.status(400).json({
-          error:
-            'Valid rider_id is required'
-        });
+        return res
+          .status(400)
+          .json({
+
+            error:
+              'Valid rider_id is required'
+
+          });
 
       }
 
@@ -493,7 +621,7 @@ app.post(
 
 
       console.log(
-        'ASSIGN REQUEST:',
+        'ASSIGN RIDER REQUEST:',
         {
           deliveryId,
           riderId
@@ -501,11 +629,9 @@ app.post(
       );
 
 
-      /*
-      ---------------------------------------------
-      FIND RIDER
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         GET RIDER
+      ----------------------------------------- */
 
       const {
         data: rider,
@@ -517,8 +643,7 @@ app.post(
             id,
             name,
             phone,
-            status,
-            is_available
+            status
           `)
           .eq(
             'id',
@@ -535,29 +660,35 @@ app.post(
         );
 
 
-        return res.status(500).json({
-          error:
-            riderError.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              riderError.message
+
+          });
 
       }
 
 
       if (!rider) {
 
-        return res.status(404).json({
-          error:
-            'Rider not found'
-        });
+        return res
+          .status(404)
+          .json({
+
+            error:
+              'Rider not found'
+
+          });
 
       }
 
 
-      /*
-      ---------------------------------------------
-      CHECK RIDER AVAILABILITY
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         CHECK RIDER STATUS
+      ----------------------------------------- */
 
       const riderStatus =
         String(
@@ -567,27 +698,26 @@ app.post(
           .toLowerCase();
 
 
-      const riderAvailable =
-        riderStatus ===
-          'available' ||
-        rider.is_available === true;
+      if (
+        riderStatus &&
+        riderStatus !== 'available'
+      ) {
 
+        return res
+          .status(400)
+          .json({
 
-      if (!riderAvailable) {
+            error:
+              `Rider ${rider.name} is currently ${rider.status}`
 
-        return res.status(400).json({
-          error:
-            'Rider is not available'
-        });
+          });
 
       }
 
 
-      /*
-      ---------------------------------------------
-      UPDATE DELIVERY
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         ASSIGN DELIVERY
+      ----------------------------------------- */
 
       const {
         data: delivery,
@@ -618,8 +748,7 @@ app.post(
               id,
               name,
               phone,
-              status,
-              is_available
+              status
             )
           `)
           .single();
@@ -633,43 +762,52 @@ app.post(
         );
 
 
-        return res.status(500).json({
-          error:
-            deliveryError.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              deliveryError.message
+
+          });
 
       }
 
 
       if (!delivery) {
 
-        return res.status(404).json({
-          error:
-            'Delivery not found'
-        });
+        return res
+          .status(404)
+          .json({
+
+            error:
+              'Delivery not found'
+
+          });
 
       }
 
 
-      /*
-      ---------------------------------------------
-      RECORD EVENT
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         RECORD ASSIGNMENT
+      ----------------------------------------- */
 
       await recordEvent(
+
         delivery.id,
+
         STATUS.ASSIGNED,
+
         'dashboard',
+
         `Assigned to ${rider.name}`
+
       );
 
 
-      /*
-      ---------------------------------------------
-      MARK RIDER BUSY
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         MARK RIDER BUSY
+      ----------------------------------------- */
 
       const {
         error: riderUpdateError
@@ -679,10 +817,7 @@ app.post(
           .update({
 
             status:
-              'busy',
-
-            is_available:
-              false
+              'busy'
 
           })
           .eq(
@@ -691,7 +826,9 @@ app.post(
           );
 
 
-      if (riderUpdateError) {
+      if (
+        riderUpdateError
+      ) {
 
         console.error(
           'RIDER BUSY UPDATE ERROR:',
@@ -701,39 +838,49 @@ app.post(
       }
 
 
-      /*
-      ---------------------------------------------
-      SEND SMS
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         SEND SMS
+      ----------------------------------------- */
 
       try {
 
-        await sendSms({
+        if (
+          rider.phone
+        ) {
 
-          to:
-            rider.phone,
+          await sendSms({
 
-          message:
-            `Reflex delivery ${delivery.delivery_code}\n` +
-            `Pickup for: ${delivery.item_description}\n` +
-            `Customer: ${delivery.customer_name}\n` +
-            `Location: ${delivery.delivery_address}\n` +
-            `Reply PICKED ${delivery.delivery_code} when collected.`
+            to:
+              rider.phone,
 
-        });
+            message:
+              `Reflex delivery ${delivery.delivery_code}\n` +
+              `Pickup for: ${delivery.item_description}\n` +
+              `Customer: ${delivery.customer_name}\n` +
+              `Location: ${delivery.delivery_address}\n` +
+              `Reply PICKED ${delivery.delivery_code} when collected.`
+
+          });
 
 
-        console.log(
-          'SMS sent successfully'
-        );
+          console.log(
+            'ASSIGNMENT SMS SENT'
+          );
 
+        } else {
+
+          console.log(
+            'Rider has no phone number. SMS skipped.'
+          );
+
+        }
 
       } catch (error) {
 
         /*
-        SMS failure should NOT undo assignment.
-        */
+         * Do NOT fail the assignment if SMS
+         * happens to fail.
+         */
 
         console.error(
           'SMS ERROR:',
@@ -756,10 +903,14 @@ app.post(
       );
 
 
-      return res.status(500).json({
-        error:
-          'Unable to assign rider'
-      });
+      return res
+        .status(500)
+        .json({
+
+          error:
+            'Unable to assign rider'
+
+        });
 
     }
 
@@ -783,14 +934,18 @@ app.post(
         );
 
 
-      if (!parsed.success) {
+      if (
+        !parsed.success
+      ) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          error:
-            'Status must be picked_up, delivered, or failed'
+            error:
+              'Status must be picked_up, delivered, or failed'
 
-        });
+          });
 
       }
 
@@ -805,9 +960,15 @@ app.post(
 
 
       const fields = {
+
         status
+
       };
 
+
+      /* -----------------------------------------
+         PICKED UP
+      ----------------------------------------- */
 
       if (
         status ===
@@ -820,6 +981,10 @@ app.post(
       }
 
 
+      /* -----------------------------------------
+         DELIVERED
+      ----------------------------------------- */
+
       if (
         status ===
         STATUS.DELIVERED
@@ -831,16 +996,28 @@ app.post(
       }
 
 
+      /* -----------------------------------------
+         FAILED
+      ----------------------------------------- */
+
       if (
         status ===
         STATUS.FAILED
       ) {
 
-        fields.failed_at =
-          now;
+        /*
+         * Your deliveries schema does NOT show
+         * a failed_at column.
+         *
+         * Therefore we only update status.
+         */
 
       }
 
+
+      /* -----------------------------------------
+         UPDATE DELIVERY
+      ----------------------------------------- */
 
       const {
         data,
@@ -859,8 +1036,7 @@ app.post(
               id,
               name,
               phone,
-              status,
-              is_available
+              status
             )
           `)
           .single();
@@ -874,37 +1050,52 @@ app.post(
         );
 
 
-        return res.status(500).json({
-          error:
-            error.message
-        });
+        return res
+          .status(500)
+          .json({
+
+            error:
+              error.message
+
+          });
 
       }
 
 
       if (!data) {
 
-        return res.status(404).json({
-          error:
-            'Delivery not found'
-        });
+        return res
+          .status(404)
+          .json({
+
+            error:
+              'Delivery not found'
+
+          });
 
       }
 
 
+      /* -----------------------------------------
+         RECORD EVENT
+      ----------------------------------------- */
+
       await recordEvent(
+
         data.id,
+
         status,
+
         'dashboard',
+
         parsed.data.note || null
+
       );
 
 
-      /*
-      ---------------------------------------------
-      FREE RIDER AFTER COMPLETION
-      ---------------------------------------------
-      */
+      /* -----------------------------------------
+         FREE RIDER
+      ----------------------------------------- */
 
       if (
         status ===
@@ -913,7 +1104,9 @@ app.post(
           STATUS.FAILED
       ) {
 
-        if (data.rider_id) {
+        if (
+          data.rider_id
+        ) {
 
           const {
             error: riderError
@@ -923,10 +1116,7 @@ app.post(
               .update({
 
                 status:
-                  'available',
-
-                is_available:
-                  true
+                  'available'
 
               })
               .eq(
@@ -935,7 +1125,9 @@ app.post(
               );
 
 
-          if (riderError) {
+          if (
+            riderError
+          ) {
 
             console.error(
               'RIDER AVAILABILITY ERROR:',
@@ -962,10 +1154,14 @@ app.post(
       );
 
 
-      return res.status(500).json({
-        error:
-          'Unable to update delivery status'
-      });
+      return res
+        .status(500)
+        .json({
+
+          error:
+            'Unable to update delivery status'
+
+        });
 
     }
 
@@ -974,7 +1170,7 @@ app.post(
 
 
 /* =========================================================
-   WHATSAPP VERIFICATION
+   WHATSAPP WEBHOOK VERIFICATION
 ========================================================= */
 
 app.get(
@@ -982,13 +1178,19 @@ app.get(
   (req, res) => {
 
     const mode =
-      req.query['hub.mode'];
+      req.query[
+        'hub.mode'
+      ];
 
     const token =
-      req.query['hub.verify_token'];
+      req.query[
+        'hub.verify_token'
+      ];
 
     const challenge =
-      req.query['hub.challenge'];
+      req.query[
+        'hub.challenge'
+      ];
 
 
     if (
@@ -1004,14 +1206,15 @@ app.get(
     }
 
 
-    return res.sendStatus(403);
+    return res
+      .sendStatus(403);
 
   }
 );
 
 
 /* =========================================================
-   WHATSAPP WEBHOOK
+   WHATSAPP INBOUND WEBHOOK
 ========================================================= */
 
 app.post(
@@ -1035,15 +1238,14 @@ app.post(
 
 
       /*
-      ---------------------------------------------
-      MVP ACKNOWLEDGEMENT
+       * We acknowledge the webhook.
+       *
+       * Actual WhatsApp message parsing will
+       * be connected to delivery creation next.
+       */
 
-      Meta webhook retries are safely acknowledged.
-      Message parsing will be added next.
-      ---------------------------------------------
-      */
-
-      return res.sendStatus(200);
+      return res
+        .sendStatus(200);
 
 
     } catch (error) {
@@ -1054,7 +1256,12 @@ app.post(
       );
 
 
-      return res.sendStatus(200);
+      /*
+       * Meta expects acknowledgement.
+       */
+
+      return res
+        .sendStatus(200);
 
     }
 
@@ -1070,10 +1277,14 @@ app.use(
   '/api',
   (_req, res) => {
 
-    return res.status(404).json({
-      error:
-        'API endpoint not found'
-    });
+    return res
+      .status(404)
+      .json({
+
+        error:
+          'API endpoint not found'
+
+      });
 
   }
 );
@@ -1084,14 +1295,19 @@ app.use(
 ========================================================= */
 
 /*
-Do NOT use:
-
-app.get('*', ...)
-
-Newer Express versions throw:
-
-Missing parameter name at index 1: *
-*/
+ * IMPORTANT:
+ *
+ * Do NOT use:
+ *
+ * app.get('*', ...)
+ *
+ * Newer Express versions can throw:
+ *
+ * PathError: Missing parameter name at index 1: *
+ *
+ * This middleware safely serves index.html
+ * for frontend routes.
+ */
 
 app.use(
   (req, res, next) => {
@@ -1131,15 +1347,19 @@ app.use(
   ) => {
 
     console.error(
-      'UNHANDLED SERVER ERROR:',
+      'UNHANDLED ERROR:',
       error
     );
 
 
-    return res.status(500).json({
-      error:
-        'Internal server error'
-    });
+    return res
+      .status(500)
+      .json({
+
+        error:
+          'Internal server error'
+
+      });
 
   }
 );
@@ -1151,8 +1371,7 @@ app.use(
 
 const port =
   Number(
-    process.env.PORT ||
-    10000
+    process.env.PORT || 10000
   );
 
 
