@@ -83,3 +83,102 @@ input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
 @media(max-width:950px){.topbar{padding:0 3%;gap:15px}.brand{min-width:auto}.nav{display:none}.content{width:94%}.dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.topbar{height:68px}.brand small{display:none}.system-status{display:none}.hero{display:block}.hero-meta{margin-top:20px;width:fit-content}.stats{grid-template-columns:repeat(2,1fr)}.content{padding-top:32px}}
 @media(max-width:460px){.topbar-actions .primary{padding:10px 11px}.topbar-actions .primary span{display:none}.hero h1{font-size:34px}.stats{gap:9px}.stat{padding:15px;min-height:105px}.stat b{font-size:27px}.panel{padding:15px}.panel-head{align-items:center}.panel-subtitle{display:none}.activity-strip{align-items:flex-start}}
+.rider-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.rider-card:last-child {
+  border-bottom: 0;
+}
+
+.rider-avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rider-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.rider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rider-top strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.rider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rider-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.rider-status.available {
+  color: #16a34a;
+}
+
+.rider-status.available i {
+  background: #16a34a;
+}
+
+.rider-status.busy {
+  color: #d97706;
+}
+
+.rider-status.busy i {
+  background: #d97706;
+}
+
+.rider-details {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.empty-state {
+  padding: 28px 10px;
+  text-align: center;
+  color: #64748b;
+}
+
+.empty-state strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.empty-state span {
+  display: block;
+  font-size: 11px;
+  line-height: 1.5;
+}
