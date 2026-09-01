@@ -41,29 +41,41 @@ function renderStats(counts) {
     return;
   }
 
-  var pending = counts['Pending'] || 0;
-  var assigned = counts['Assigned'] || 0;
-  var pickedUp = counts['Picked Up'] || 0;
-  var delivered = counts['Delivered'] || 0;
+  function getCount(status) {
+    var key = Object.keys(counts || {}).find(function (key) {
+      return key.toLowerCase() === status.toLowerCase();
+    });
+
+    return key ? counts[key] : 0;
+  }
+
+  var pending = getCount('Pending');
+  var assigned = getCount('Assigned');
+  var pickedUp = getCount('Picked Up');
+  var delivered = getCount('Delivered');
 
   stats.innerHTML =
-    statCard(pending, 'Pending', 'Requests waiting for assignment') +
-    statCard(assigned, 'Assigned', 'Riders assigned') +
-    statCard(pickedUp, 'Picked Up', 'Orders on the road') +
-    statCard(delivered, 'Delivered', 'Completed deliveries');
+    statCard(
+      pending,
+      'Pending',
+      'Requests waiting for assignment'
+    ) +
+    statCard(
+      assigned,
+      'Assigned',
+      'Riders assigned'
+    ) +
+    statCard(
+      pickedUp,
+      'Picked Up',
+      'Orders on the road'
+    ) +
+    statCard(
+      delivered,
+      'Delivered',
+      'Completed deliveries'
+    );
 }
-
-
-function statCard(number, label, description) {
-  return (
-    '<div class="stat">' +
-      '<b>' + number + '</b>' +
-      '<span>' + escapeHtml(label) + '</span>' +
-      '<small>' + escapeHtml(description) + '</small>' +
-    '</div>'
-  );
-}
-
 
 // ============================================
 // RIDERS
