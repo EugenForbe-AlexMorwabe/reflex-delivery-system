@@ -1209,36 +1209,17 @@ function setupRefreshButton() {
 ====================================================== */
 
 function setupAssignModal() {
-
-  if (
-    document.getElementById(
-      'assign-modal'
-    )
-  ) {
-
+  if (document.getElementById('assign-modal')) {
     return;
-
   }
 
+  const modal = document.createElement('div');
 
-  const modal =
-    document.createElement('div');
-
-
-  modal.id =
-    'assign-modal';
-
-
-  modal.className =
-    'modal';
-
-
-  modal.style.display =
-    'none';
-
+  modal.id = 'assign-modal';
+  modal.className = 'modal';
+  modal.style.display = 'none';
 
   modal.innerHTML = `
-
     <div
       class="modal-card"
       style="
@@ -1256,7 +1237,6 @@ function setupAssignModal() {
         ×
       </button>
 
-
       <div
         style="
           width:44px;
@@ -1273,21 +1253,17 @@ function setupAssignModal() {
         🏍
       </div>
 
-
       <div class="eyebrow">
         DISPATCH
       </div>
-
 
       <h2>
         Assign rider
       </h2>
 
-
       <p class="modal-subtitle">
         Choose an available rider for this delivery.
       </p>
-
 
       <div
         id="assign-delivery-summary"
@@ -1301,7 +1277,6 @@ function setupAssignModal() {
       >
       </div>
 
-
       <div
         id="assign-riders"
         style="
@@ -1313,7 +1288,6 @@ function setupAssignModal() {
         "
       >
       </div>
-
 
       <div
         id="assign-error"
@@ -1329,13 +1303,11 @@ function setupAssignModal() {
       >
       </div>
 
-
       <button
         type="button"
         id="confirm-assign-btn"
         class="primary submit-btn"
         disabled
-        onclick="confirmAssignRider()"
         style="
           margin-top:16px;
           width:100%;
@@ -1345,50 +1317,65 @@ function setupAssignModal() {
       </button>
 
     </div>
-
   `;
 
+  document.body.appendChild(modal);
 
-  document.body.appendChild(
-    modal
-  );
 
+  /* Close button */
 
   const closeButton =
-    document.getElementById(
-      'close-assign-modal'
-    );
-
+    document.getElementById('close-assign-modal');
 
   if (closeButton) {
-
-    closeButton.onclick =
+    closeButton.addEventListener(
+      'click',
       function () {
-
         closeAssignModal();
+      }
+    );
+  }
 
-      };
+
+  /* Confirm assignment button */
+
+  const confirmButton =
+    document.getElementById('confirm-assign-btn');
+
+  if (confirmButton) {
+
+    confirmButton.addEventListener(
+      'click',
+      function (event) {
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        console.log(
+          'ASSIGN RIDER BUTTON CLICKED'
+        );
+
+        confirmAssignRider();
+
+      }
+    );
 
   }
 
+
+  /* Close when clicking outside */
 
   modal.addEventListener(
     'click',
     function (event) {
 
-      if (
-        event.target === modal
-      ) {
-
+      if (event.target === modal) {
         closeAssignModal();
-
       }
 
     }
   );
-
 }
-
 
 /* ======================================================
    SHOW ASSIGN RIDER MODAL
@@ -2002,33 +1989,23 @@ function selectRider(
 
 async function confirmAssignRider() {
 
+  console.log('==============================');
+  console.log('STARTING RIDER ASSIGNMENT');
   console.log(
-    '================================'
-  );
-
-  console.log(
-    'ASSIGN RIDER CLICKED'
-  );
-
-  console.log(
-    'Delivery ID:',
+    'Delivery:',
     selectedDeliveryId
   );
-
   console.log(
-    'Rider ID:',
+    'Rider:',
     selectedRiderId
   );
-
-  console.log(
-    '================================'
-  );
+  console.log('==============================');
 
 
   if (!selectedDeliveryId) {
 
     alert(
-      'No delivery selected.'
+      'ERROR: No delivery selected.'
     );
 
     return;
@@ -2039,7 +2016,7 @@ async function confirmAssignRider() {
   if (!selectedRiderId) {
 
     alert(
-      'Please select a rider first.'
+      'ERROR: Please select a rider.'
     );
 
     return;
@@ -2059,6 +2036,16 @@ async function confirmAssignRider() {
     );
 
 
+  if (button) {
+
+    button.disabled = true;
+
+    button.textContent =
+      'Assigning...';
+
+  }
+
+
   if (errorBox) {
 
     errorBox.style.display =
@@ -2066,17 +2053,6 @@ async function confirmAssignRider() {
 
     errorBox.textContent =
       '';
-
-  }
-
-
-  if (button) {
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      'Assigning rider...';
 
   }
 
@@ -2089,9 +2065,19 @@ async function confirmAssignRider() {
       )}/assign`;
 
 
+    const payload = {
+      rider_id: selectedRiderId
+    };
+
+
     console.log(
-      'Assignment URL:',
+      'POST:',
       url
+    );
+
+    console.log(
+      'PAYLOAD:',
+      payload
     );
 
 
@@ -2099,31 +2085,24 @@ async function confirmAssignRider() {
       await fetch(
         url,
         {
-
           method: 'POST',
 
           headers: {
-
             'Content-Type':
               'application/json',
 
             'Accept':
               'application/json'
-
           },
 
           body:
-            JSON.stringify({
-              rider_id:
-                selectedRiderId
-            })
-
+            JSON.stringify(payload)
         }
       );
 
 
     console.log(
-      'Assignment HTTP status:',
+      'HTTP STATUS:',
       response.status
     );
 
@@ -2133,7 +2112,7 @@ async function confirmAssignRider() {
 
 
     console.log(
-      'Assignment server response:',
+      'SERVER RESPONSE:',
       responseText
     );
 
@@ -2141,16 +2120,27 @@ async function confirmAssignRider() {
     let data = {};
 
 
-    try {
+    if (responseText) {
 
-      data =
-        responseText
-          ? JSON.parse(responseText)
-          : {};
+      try {
 
-    } catch (_) {
+        data =
+          JSON.parse(
+            responseText
+          );
 
-      data = {};
+      } catch (parseError) {
+
+        console.error(
+          'JSON parsing error:',
+          parseError
+        );
+
+        throw new Error(
+          `Server returned HTTP ${response.status}: ${responseText}`
+        );
+
+      }
 
     }
 
@@ -2160,15 +2150,26 @@ async function confirmAssignRider() {
       throw new Error(
         data.error ||
         data.details ||
-        `Assignment failed: HTTP ${response.status}`
+        `Assignment failed with HTTP ${response.status}`
       );
 
     }
 
 
     console.log(
-      'RIDER ASSIGNED SUCCESSFULLY',
+      '================================'
+    );
+
+    console.log(
+      'RIDER ASSIGNMENT SUCCESSFUL'
+    );
+
+    console.log(
       data
+    );
+
+    console.log(
+      '================================'
     );
 
 
@@ -2181,8 +2182,19 @@ async function confirmAssignRider() {
   } catch (error) {
 
     console.error(
-      'ASSIGN RIDER ERROR:',
+      '================================'
+    );
+
+    console.error(
+      'RIDER ASSIGNMENT FAILED'
+    );
+
+    console.error(
       error
+    );
+
+    console.error(
+      '================================'
     );
 
 
@@ -2198,7 +2210,7 @@ async function confirmAssignRider() {
     } else {
 
       alert(
-        'ASSIGN RIDER ERROR\n\n' +
+        'RIDER ASSIGNMENT FAILED\n\n' +
         (
           error.message ||
           'Unable to assign rider.'
