@@ -10,36 +10,410 @@
 // LOAD DASHBOARD
 // ============================================
 
-async function load() {
-  try {
-    const response = await fetch('/api/dashboard', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      },
-      cache: 'no-store'
-    });
+// ============================================
+// ASSIGN RIDER MODAL
+// ============================================
 
-    const data = await response.json();
+let selectedRiderId = null;
+let selectedDeliveryId = null;
+
+
+// ============================================
+// OPEN ASSIGN RIDER MODAL
+// ============================================
+
+async function showAssignRider(deliveryId) {
+
+  selectedDeliveryId = deliveryId;
+  selectedRiderId = null;
+
+  const modal =
+    document.getElementById('assign-modal');
+
+  const ridersContainer =
+    document.getElementById('assign-riders');
+
+  const summary =
+    document.getElementById(
+      'assign-delivery-summary'
+    );
+
+  const errorBox =
+    document.getElementById(
+      'assign-error'
+    );
+
+  const confirmButton =
+    document.getElementById(
+      'confirm-assign-btn'
+    );
+
+  if (!modal) {
+    console.error(
+      'Assign modal not found'
+    );
+
+    return;
+  }
+
+  if (ridersContainer) {
+    ridersContainer.innerHTML = `
+      <div class="empty-state">
+        <strong>Loading riders...</strong>
+        <span>Please wait.</span>
+      </div>
+    `;
+  }
+
+  if (errorBox) {
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  if (confirmButton) {
+    confirmButton.disabled = true;
+    confirmButton.classList.remove(
+      'loading'
+    );
+  }
+
+  modal.style.display = 'flex';
+
+  try {
+
+    const response =
+      await fetch('/api/dashboard', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        },
+        cache: 'no-store'
+      });
+
+    const data =
+      await response.json();
 
     if (!response.ok) {
       throw new Error(
         data.details ||
         data.error ||
-        `Dashboard request failed: ${response.status}`
+        'Unable to load dashboard'
       );
     }
 
-    console.log('Dashboard data loaded:', data);
+    const delivery =
+      (data.deliveries || []).find(
+        item =>
+          String(item.id) ===
+          String(deliveryId)
+      );
 
-    renderStats(data.counts || {});
-    renderDeliveries(data.deliveries || []);
-    renderRiders(data.riders || []);
+    if (summary && delivery) {
+
+      summary.innerHTML = `
+        <strong>
+          ${escapeHtml(
+            delivery.delivery_code ||
+            'Delivery'
+          )}
+        </strong>
+
+        <span>
+          ${escapeHtml(
+            delivery.customer_name ||
+            'Customer'
+          )}
+          ·
+          ${escapeHtml(
+            delivery.delivery_address ||
+            'No address'
+          )}
+        </span>
+      `;
+    }
+
+    const availableRiders =
+      (data.riders || []).filter(
+        rider =>
+          rider.is_available === true ||
+          rider.is_available === 'true'
+      );
+
+    renderAssignRiders(
+      availableRiders
+    );
 
   } catch (error) {
-    console.error('Dashboard loading error:', error);
 
-    renderDashboardError(error.message);
+    console.error(
+      'Load riders for assignment error:',
+      error
+    );
+
+    if (ridersContainer) {
+      ridersContainer.innerHTML = `
+        <div class="empty-state">
+          <strong>Unable to load riders</strong>
+          <span>
+            ${escapeHtml(
+              error.message
+            )}
+          </span>
+        </div>
+      `;
+    }
+  }
+}
+
+
+// ============================================
+// RENDER AVAILABLE RIDERS
+// ============================================
+
+function renderAssignRiders(riders) {
+
+  const container =
+    document.getElementById(
+      'assign-riders'
+    );
+
+  if (!container) {
+    return;
+  }
+
+  if (
+    !Array.isArray(riders) ||
+    riders.length === 0
+  ) {
+
+    container.innerHTML = `
+      <div class="empty-state">
+        <strong>No available riders</strong>
+        <span>
+          All riders are currently busy.
+        </span>
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML =
+    riders.map(function (rider) {
+
+      const name =
+        rider.name ||
+        'Unnamed Rider';
+
+      const vehicle =
+        rider.vehicle ||
+        'Motorcycle';
+
+      const phone =
+        rider.phone ||
+        'No phone';
+
+      return `
+        <button
+          type="button"
+          class="assign-rider"
+          data-rider-id="${escapeAttribute(
+            rider.id
+          )}"
+          onclick="selectRider(
+            '${escapeAttribute(rider.id)}',
+            this
+          )"
+        >
+
+          <span class="assign-rider-avatar">
+            ${escapeHtml(
+              getInitials(name)
+            )}
+          </span>
+
+          <span class="assign-rider-info">
+
+            <span class="assign-rider-name">
+              ${escapeHtml(name)}
+            </span>
+
+            <span class="assign-rider-meta">
+              ${escapeHtml(vehicle)}
+              ·
+              ${escapeHtml(phone)}
+            </span>
+
+          </span>
+
+          <span class="assign-rider-check">
+            ✓
+          </span>
+
+        </button>
+      `;
+
+    }).join('');
+}
+
+
+// ============================================
+// SELECT RIDER
+// ============================================
+
+function selectRider(
+  riderId,
+  element
+) {
+
+  selectedRiderId = riderId;
+
+  const buttons =
+    document.querySelectorAll(
+      '.assign-rider'
+    );
+
+  buttons.forEach(function (button) {
+    button.classList.remove(
+      'selected'
+    );
+  });
+
+  if (element) {
+    element.classList.add(
+      'selected'
+    );
+  }
+
+  const confirmButton =
+    document.getElementById(
+      'confirm-assign-btn'
+    );
+
+  if (confirmButton) {
+    confirmButton.disabled = false;
+  }
+}
+
+
+// ============================================
+// CLOSE ASSIGN MODAL
+// ============================================
+
+function closeAssignModal() {
+
+  const modal =
+    document.getElementById(
+      'assign-modal'
+    );
+
+  if (modal) {
+    modal.style.display = 'none';
+  }
+
+  selectedRiderId = null;
+  selectedDeliveryId = null;
+}
+
+
+// ============================================
+// CONFIRM ASSIGNMENT
+// ============================================
+
+async function confirmAssignRider() {
+
+  if (
+    !selectedDeliveryId ||
+    !selectedRiderId
+  ) {
+    return;
+  }
+
+  const button =
+    document.getElementById(
+      'confirm-assign-btn'
+    );
+
+  const errorBox =
+    document.getElementById(
+      'assign-error'
+    );
+
+  if (errorBox) {
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.classList.add('loading');
+    button.textContent =
+      'Assigning rider...';
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        `/api/deliveries/${encodeURIComponent(
+          selectedDeliveryId
+        )}/assign`,
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            'Accept':
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            rider_id:
+              selectedRiderId
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        data.details ||
+        'Unable to assign rider'
+      );
+    }
+
+    closeAssignModal();
+
+    await load();
+
+  } catch (error) {
+
+    console.error(
+      'Assign rider error:',
+      error
+    );
+
+    if (errorBox) {
+      errorBox.textContent =
+        error.message;
+
+      errorBox.style.display =
+        'block';
+    }
+
+    if (button) {
+      button.disabled = false;
+      button.classList.remove(
+        'loading'
+      );
+      button.textContent =
+        'Assign rider';
+    }
   }
 }
 
