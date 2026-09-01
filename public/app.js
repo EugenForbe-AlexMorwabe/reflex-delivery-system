@@ -1,44 +1,44 @@
 'use strict';
 
 /*
-====================================================
+========================================================
 REFLEX DELIVERY SYSTEM
-Frontend Dashboard
-====================================================
+public/app.js
+========================================================
 */
 
 
-/* ==================================================
+/* ======================================================
    GLOBAL STATE
-================================================== */
+====================================================== */
 
-let selectedRiderId = null;
 let selectedDeliveryId = null;
+let selectedRiderId = null;
 
 
-/* ==================================================
-   INITIALIZE
-================================================== */
+/* ======================================================
+   START APPLICATION
+====================================================== */
 
 document.addEventListener('DOMContentLoaded', function () {
 
   console.log('Reflex dashboard starting...');
 
   setupDeliveryForm();
-  setupModal();
-  setupAssignModal();
+  setupMainModal();
   setupRefreshButton();
+  setupAssignModal();
 
-  load();
+  loadDashboard();
 
 });
 
 
-/* ==================================================
+/* ======================================================
    LOAD DASHBOARD
-================================================== */
+====================================================== */
 
-async function load() {
+async function loadDashboard() {
 
   try {
 
@@ -57,36 +57,28 @@ async function load() {
     if (!response.ok) {
 
       throw new Error(
-        data.details ||
         data.error ||
+        data.details ||
         `Dashboard request failed: ${response.status}`
       );
 
     }
 
 
-    console.log('Dashboard loaded:', data);
+    console.log('Dashboard data:', data);
 
 
-    renderStats(
-      data.counts || {}
-    );
+    renderStats(data.counts || {});
 
+    renderDeliveries(data.deliveries || []);
 
-    renderDeliveries(
-      data.deliveries || []
-    );
-
-
-    renderRiders(
-      data.riders || []
-    );
+    renderRiders(data.riders || []);
 
 
   } catch (error) {
 
     console.error(
-      'Dashboard loading error:',
+      'Dashboard request failed:',
       error
     );
 
@@ -100,15 +92,14 @@ async function load() {
 }
 
 
-/* ==================================================
+/* ======================================================
    DASHBOARD ERROR
-================================================== */
+====================================================== */
 
 function renderDashboardError(message) {
 
   const queue =
     document.getElementById('queue');
-
 
   const riders =
     document.getElementById('riders');
@@ -158,9 +149,9 @@ function renderDashboardError(message) {
 }
 
 
-/* ==================================================
-   STATISTICS
-================================================== */
+/* ======================================================
+   STATS
+====================================================== */
 
 function renderStats(counts) {
 
@@ -170,8 +161,8 @@ function renderStats(counts) {
 
   if (!stats) {
 
-    console.error(
-      'Element #stats not found'
+    console.warn(
+      'Stats container #stats not found.'
     );
 
     return;
@@ -209,38 +200,81 @@ function renderStats(counts) {
 
   stats.innerHTML = `
 
-    ${statCard(
-      pending,
-      'Pending',
-      'Requests waiting for assignment'
-    )}
+    <div class="stat">
 
-    ${statCard(
-      assigned,
-      'Assigned',
-      'Riders assigned'
-    )}
+      <b>
+        ${pending}
+      </b>
 
-    ${statCard(
-      pickedUp,
-      'Picked Up',
-      'Orders on the road'
-    )}
+      <span>
+        Pending
+      </span>
 
-    ${statCard(
-      delivered,
-      'Delivered',
-      'Completed deliveries'
-    )}
+      <small>
+        Requests waiting for assignment
+      </small>
+
+    </div>
+
+
+    <div class="stat">
+
+      <b>
+        ${assigned}
+      </b>
+
+      <span>
+        Assigned
+      </span>
+
+      <small>
+        Riders assigned
+      </small>
+
+    </div>
+
+
+    <div class="stat">
+
+      <b>
+        ${pickedUp}
+      </b>
+
+      <span>
+        Picked Up
+      </span>
+
+      <small>
+        Orders on the road
+      </small>
+
+    </div>
+
+
+    <div class="stat">
+
+      <b>
+        ${delivered}
+      </b>
+
+      <span>
+        Delivered
+      </span>
+
+      <small>
+        Completed deliveries
+      </small>
+
+    </div>
 
   `;
 
 }
 
 
-/* ==================================================
-   STATUS COUNT
-================================================== */
+/* ======================================================
+   GET STATUS COUNT
+====================================================== */
 
 function getStatusCount(
   counts,
@@ -257,15 +291,15 @@ function getStatusCount(
   }
 
 
-  const matchingKey =
+  const key =
     Object.keys(counts).find(
-      function (key) {
+      function (item) {
 
         return (
-          String(key)
+          String(item)
             .trim()
             .toLowerCase() ===
-          requestedStatus
+          String(requestedStatus)
             .trim()
             .toLowerCase()
         );
@@ -274,7 +308,7 @@ function getStatusCount(
     );
 
 
-  if (!matchingKey) {
+  if (!key) {
 
     return 0;
 
@@ -282,61 +316,28 @@ function getStatusCount(
 
 
   return Number(
-    counts[matchingKey]
+    counts[key]
   ) || 0;
 
 }
 
 
-/* ==================================================
-   STAT CARD
-================================================== */
-
-function statCard(
-  number,
-  label,
-  description
-) {
-
-  return `
-
-    <div class="stat">
-
-      <b>
-        ${number}
-      </b>
-
-      <span>
-        ${escapeHtml(label)}
-      </span>
-
-      <small>
-        ${escapeHtml(description)}
-      </small>
-
-    </div>
-
-  `;
-
-}
-
-
-/* ==================================================
-   DELIVERY QUEUE
-================================================== */
+/* ======================================================
+   DELIVERY LIST
+====================================================== */
 
 function renderDeliveries(
   deliveries
 ) {
 
-  const container =
+  const queue =
     document.getElementById('queue');
 
 
-  if (!container) {
+  if (!queue) {
 
-    console.error(
-      'Element #queue not found'
+    console.warn(
+      'Delivery queue #queue not found.'
     );
 
     return;
@@ -349,7 +350,7 @@ function renderDeliveries(
     deliveries.length === 0
   ) {
 
-    container.innerHTML = `
+    queue.innerHTML = `
 
       <div class="empty-state">
 
@@ -371,32 +372,39 @@ function renderDeliveries(
   }
 
 
-  container.innerHTML =
+  queue.innerHTML =
     deliveries
-      .map(
-        renderDelivery
-      )
+      .map(renderDelivery)
       .join('');
 
 }
 
 
-/* ==================================================
+/* ======================================================
    DELIVERY CARD
-================================================== */
+====================================================== */
 
 function renderDelivery(
   delivery
 ) {
 
-  const code =
+  const deliveryId =
+    delivery.id || '';
+
+
+  const deliveryCode =
     delivery.delivery_code ||
-    'Delivery';
+    'No code';
 
 
-  const customer =
+  const customerName =
     delivery.customer_name ||
     'Unknown customer';
+
+
+  const customerPhone =
+    delivery.customer_phone ||
+    '';
 
 
   const address =
@@ -406,34 +414,28 @@ function renderDelivery(
 
   const item =
     delivery.item_description ||
-    'Item not specified';
+    'No item description';
 
 
   const status =
     normalizeStatus(
-      delivery.status ||
-      'Pending'
+      delivery.status
     );
 
 
-  const rider =
+  const riderName =
     delivery.rider &&
     delivery.rider.name
       ? delivery.rider.name
       : 'Unassigned';
 
 
-  const phone =
-    delivery.customer_phone ||
-    '';
-
-
   let actions = '';
 
 
-  /* ----------------------------------------------
+  /* --------------------------------------------------
      PENDING
-  ---------------------------------------------- */
+  -------------------------------------------------- */
 
   if (status === 'Pending') {
 
@@ -443,9 +445,7 @@ function renderDelivery(
 
         <button
           type="button"
-          onclick="showAssignRider(
-            '${escapeAttribute(delivery.id)}'
-          )"
+          onclick="showAssignRider('${escapeAttribute(deliveryId)}')"
         >
           Assign rider
         </button>
@@ -457,11 +457,11 @@ function renderDelivery(
   }
 
 
-  /* ----------------------------------------------
+  /* --------------------------------------------------
      ASSIGNED
-  ---------------------------------------------- */
+  -------------------------------------------------- */
 
-  else if (status === 'Assigned') {
+  if (status === 'Assigned') {
 
     actions = `
 
@@ -469,8 +469,8 @@ function renderDelivery(
 
         <button
           type="button"
-          onclick="updateStatus(
-            '${escapeAttribute(delivery.id)}',
+          onclick="updateDeliveryStatus(
+            '${escapeAttribute(deliveryId)}',
             'Picked Up'
           )"
         >
@@ -484,11 +484,11 @@ function renderDelivery(
   }
 
 
-  /* ----------------------------------------------
+  /* --------------------------------------------------
      PICKED UP
-  ---------------------------------------------- */
+  -------------------------------------------------- */
 
-  else if (status === 'Picked Up') {
+  if (status === 'Picked Up') {
 
     actions = `
 
@@ -496,18 +496,19 @@ function renderDelivery(
 
         <button
           type="button"
-          onclick="updateStatus(
-            '${escapeAttribute(delivery.id)}',
+          onclick="updateDeliveryStatus(
+            '${escapeAttribute(deliveryId)}',
             'Delivered'
           )"
         >
           Mark delivered
         </button>
 
+
         <button
           type="button"
-          onclick="updateStatus(
-            '${escapeAttribute(delivery.id)}',
+          onclick="updateDeliveryStatus(
+            '${escapeAttribute(deliveryId)}',
             'Failed'
           )"
         >
@@ -530,11 +531,11 @@ function renderDelivery(
         <div>
 
           <strong>
-            ${escapeHtml(code)}
+            ${escapeHtml(deliveryCode)}
           </strong>
 
           <div class="muted">
-            ${escapeHtml(customer)}
+            ${escapeHtml(customerName)}
           </div>
 
         </div>
@@ -565,7 +566,7 @@ function renderDelivery(
 
 
       ${
-        phone
+        customerPhone
           ? `
 
             <div
@@ -573,7 +574,7 @@ function renderDelivery(
               style="margin-top:5px"
             >
               Phone:
-              ${escapeHtml(phone)}
+              ${escapeHtml(customerPhone)}
             </div>
 
           `
@@ -588,7 +589,7 @@ function renderDelivery(
         Rider:
 
         <strong>
-          ${escapeHtml(rider)}
+          ${escapeHtml(riderName)}
         </strong>
 
       </div>
@@ -603,13 +604,11 @@ function renderDelivery(
 }
 
 
-/* ==================================================
-   NORMALIZE STATUS
-================================================== */
+/* ======================================================
+   NORMALIZE DELIVERY STATUS
+====================================================== */
 
-function normalizeStatus(
-  status
-) {
+function normalizeStatus(status) {
 
   const value =
     String(status || '')
@@ -617,41 +616,53 @@ function normalizeStatus(
       .toLowerCase();
 
 
-  switch (value) {
+  if (value === 'pending') {
 
-    case 'pending':
-      return 'Pending';
-
-
-    case 'assigned':
-      return 'Assigned';
-
-
-    case 'picked up':
-    case 'picked_up':
-    case 'pickedup':
-      return 'Picked Up';
-
-
-    case 'delivered':
-      return 'Delivered';
-
-
-    case 'failed':
-      return 'Failed';
-
-
-    default:
-      return status || 'Pending';
+    return 'Pending';
 
   }
+
+
+  if (value === 'assigned') {
+
+    return 'Assigned';
+
+  }
+
+
+  if (
+    value === 'picked up' ||
+    value === 'picked_up' ||
+    value === 'pickedup'
+  ) {
+
+    return 'Picked Up';
+
+  }
+
+
+  if (value === 'delivered') {
+
+    return 'Delivered';
+
+  }
+
+
+  if (value === 'failed') {
+
+    return 'Failed';
+
+  }
+
+
+  return status || 'Pending';
 
 }
 
 
-/* ==================================================
+/* ======================================================
    RIDERS
-================================================== */
+====================================================== */
 
 function renderRiders(
   riders
@@ -663,8 +674,8 @@ function renderRiders(
 
   if (!container) {
 
-    console.error(
-      'Element #riders not found'
+    console.warn(
+      'Riders container #riders not found.'
     );
 
     return;
@@ -686,8 +697,7 @@ function renderRiders(
         </strong>
 
         <span>
-          Add riders in Supabase
-          to see them here.
+          Add riders in Supabase.
         </span>
 
       </div>
@@ -707,9 +717,19 @@ function renderRiders(
 }
 
 
-/* ==================================================
+/* ======================================================
    RIDER CARD
-================================================== */
+
+   IMPORTANT:
+   Your database uses:
+
+       status = available
+       status = busy
+
+   NOT:
+
+       is_available
+====================================================== */
 
 function renderRider(
   rider
@@ -730,29 +750,19 @@ function renderRider(
     'Motorcycle';
 
 
-  /*
-  IMPORTANT:
-
-  Supabase riders table uses:
-
-      status = available
-      status = busy
-
-  NOT:
-
-      is_available
-  */
-
-  const available =
+  const riderStatus =
     String(
       rider.status || ''
     )
       .trim()
-      .toLowerCase() ===
-    'available';
+      .toLowerCase();
 
 
-  const status =
+  const available =
+    riderStatus === 'available';
+
+
+  const statusLabel =
     available
       ? 'Available'
       : 'Busy';
@@ -792,7 +802,7 @@ function renderRider(
 
             <i></i>
 
-            ${status}
+            ${statusLabel}
 
           </span>
 
@@ -820,9 +830,9 @@ function renderRider(
 }
 
 
-/* ==================================================
+/* ======================================================
    CREATE DELIVERY FORM
-================================================== */
+====================================================== */
 
 function setupDeliveryForm() {
 
@@ -833,7 +843,7 @@ function setupDeliveryForm() {
   if (!form) {
 
     console.warn(
-      'Delivery form #form not found'
+      'Delivery form #form not found.'
     );
 
     return;
@@ -872,34 +882,44 @@ function setupDeliveryForm() {
       const payload = {
 
         customer_name:
-          formData.get(
-            'customer_name'
-          ),
+          String(
+            formData.get(
+              'customer_name'
+            ) || ''
+          ).trim(),
 
 
         customer_phone:
-          formData.get(
-            'customer_phone'
-          ),
+          String(
+            formData.get(
+              'customer_phone'
+            ) || ''
+          ).trim(),
 
 
         delivery_address:
-          formData.get(
-            'delivery_address'
-          ),
+          String(
+            formData.get(
+              'delivery_address'
+            ) || ''
+          ).trim(),
 
 
         item_description:
-          formData.get(
-            'item_description'
-          ),
+          String(
+            formData.get(
+              'item_description'
+            ) || ''
+          ).trim(),
 
 
         retailer_name:
-          formData.get(
-            'retailer_name'
-          ) ||
-          'Demo Retailer'
+          String(
+            formData.get(
+              'retailer_name'
+            ) ||
+            'Demo Retailer'
+          ).trim()
 
       };
 
@@ -924,16 +944,31 @@ function setupDeliveryForm() {
               },
 
               body:
-                JSON.stringify(
-                  payload
-                )
+                JSON.stringify(payload)
 
             }
           );
 
 
-        const data =
-          await response.json();
+        const text =
+          await response.text();
+
+
+        let data = {};
+
+
+        try {
+
+          data =
+            text
+              ? JSON.parse(text)
+              : {};
+
+        } catch (_) {
+
+          data = {};
+
+        }
 
 
         if (!response.ok) {
@@ -941,7 +976,7 @@ function setupDeliveryForm() {
           throw new Error(
             data.error ||
             data.details ||
-            'Unable to create delivery'
+            `Create delivery failed: HTTP ${response.status}`
           );
 
         }
@@ -970,10 +1005,10 @@ function setupDeliveryForm() {
         }
 
 
-        closeModal();
+        closeMainModal();
 
 
-        await load();
+        await loadDashboard();
 
 
       } catch (error) {
@@ -1010,11 +1045,11 @@ function setupDeliveryForm() {
 }
 
 
-/* ==================================================
+/* ======================================================
    MAIN MODAL
-================================================== */
+====================================================== */
 
-function setupModal() {
+function setupMainModal() {
 
   const modal =
     document.getElementById('modal');
@@ -1035,7 +1070,7 @@ function setupModal() {
         event.target === modal
       ) {
 
-        closeModal();
+        closeMainModal();
 
       }
 
@@ -1045,7 +1080,7 @@ function setupModal() {
 }
 
 
-function openModal() {
+function openMainModal() {
 
   const modal =
     document.getElementById('modal');
@@ -1064,7 +1099,7 @@ function openModal() {
 }
 
 
-function closeModal() {
+function closeMainModal() {
 
   const modal =
     document.getElementById('modal');
@@ -1083,9 +1118,28 @@ function closeModal() {
 }
 
 
-/* ==================================================
-   REFRESH BUTTON
-================================================== */
+/*
+Keep compatibility with the existing HTML
+if it calls openModal()/closeModal().
+*/
+
+function openModal() {
+
+  openMainModal();
+
+}
+
+
+function closeModal() {
+
+  closeMainModal();
+
+}
+
+
+/* ======================================================
+   REFRESH
+====================================================== */
 
 function setupRefreshButton() {
 
@@ -1104,42 +1158,45 @@ function setupRefreshButton() {
           .toLowerCase();
 
 
-      if (text === 'refresh') {
+      if (text !== 'refresh') {
 
-        button.addEventListener(
-          'click',
-          async function () {
-
-            button.disabled =
-              true;
-
-
-            const originalText =
-              button.textContent;
-
-
-            button.textContent =
-              'Refreshing...';
-
-
-            try {
-
-              await load();
-
-            } finally {
-
-              button.disabled =
-                false;
-
-              button.textContent =
-                originalText;
-
-            }
-
-          }
-        );
+        return;
 
       }
+
+
+      button.addEventListener(
+        'click',
+        async function () {
+
+          const originalText =
+            button.textContent;
+
+
+          button.disabled =
+            true;
+
+
+          button.textContent =
+            'Refreshing...';
+
+
+          try {
+
+            await loadDashboard();
+
+          } finally {
+
+            button.disabled =
+              false;
+
+            button.textContent =
+              originalText;
+
+          }
+
+        }
+      );
 
     }
   );
@@ -1147,9 +1204,9 @@ function setupRefreshButton() {
 }
 
 
-/* ==================================================
+/* ======================================================
    ASSIGN RIDER MODAL
-================================================== */
+====================================================== */
 
 function setupAssignModal() {
 
@@ -1227,11 +1284,8 @@ function setupAssignModal() {
       </h2>
 
 
-      <p
-        class="modal-subtitle"
-      >
-        Choose an available rider
-        for this delivery.
+      <p class="modal-subtitle">
+        Choose an available rider for this delivery.
       </p>
 
 
@@ -1281,6 +1335,7 @@ function setupAssignModal() {
         id="confirm-assign-btn"
         class="primary submit-btn"
         disabled
+        onclick="confirmAssignRider()"
         style="
           margin-top:16px;
           width:100%;
@@ -1307,10 +1362,12 @@ function setupAssignModal() {
 
   if (closeButton) {
 
-    closeButton.addEventListener(
-      'click',
-      closeAssignModal
-    );
+    closeButton.onclick =
+      function () {
+
+        closeAssignModal();
+
+      };
 
   }
 
@@ -1330,32 +1387,22 @@ function setupAssignModal() {
     }
   );
 
-
-  const confirmButton =
-    document.getElementById(
-      'confirm-assign-btn'
-    );
-
-
-  if (confirmButton) {
-
-    confirmButton.addEventListener(
-      'click',
-      confirmAssignRider
-    );
-
-  }
-
 }
 
 
-/* ==================================================
-   OPEN ASSIGN RIDER
-================================================== */
+/* ======================================================
+   SHOW ASSIGN RIDER MODAL
+====================================================== */
 
 async function showAssignRider(
   deliveryId
 ) {
+
+  console.log(
+    'Opening assignment for delivery:',
+    deliveryId
+  );
+
 
   selectedDeliveryId =
     deliveryId;
@@ -1401,7 +1448,7 @@ async function showAssignRider(
   if (!modal) {
 
     console.error(
-      'Assign modal could not be created'
+      'Assign modal not found.'
     );
 
     return;
@@ -1483,27 +1530,46 @@ async function showAssignRider(
     if (!response.ok) {
 
       throw new Error(
-        data.details ||
         data.error ||
-        'Unable to load riders'
+        data.details ||
+        `Unable to load riders: HTTP ${response.status}`
       );
 
     }
 
 
+    const deliveries =
+      Array.isArray(
+        data.deliveries
+      )
+        ? data.deliveries
+        : [];
+
+
+    const riders =
+      Array.isArray(
+        data.riders
+      )
+        ? data.riders
+        : [];
+
+
     const delivery =
-      (data.deliveries || [])
-        .find(
-          function (item) {
+      deliveries.find(
+        function (item) {
 
-            return (
-              String(item.id) ===
-              String(deliveryId)
-            );
+          return (
+            String(item.id) ===
+            String(deliveryId)
+          );
 
-          }
-        );
+        }
+      );
 
+
+    /* --------------------------------------------------
+       DELIVERY SUMMARY
+    -------------------------------------------------- */
 
     if (summary) {
 
@@ -1549,52 +1615,52 @@ async function showAssignRider(
 
         `;
 
-      } else {
-
-        summary.innerHTML = `
-
-          <span
-            style="
-              color:#64748b;
-              font-size:11px;
-            "
-          >
-            Select an available rider.
-          </span>
-
-        `;
-
       }
 
     }
 
 
     /*
-    ==================================================
-    IMPORTANT RIDER FILTER
+    ======================================================
+    THIS IS THE IMPORTANT FIX
 
-    Your Supabase riders table uses:
+    Your Supabase table has:
 
-        status = available
+        riders.status
 
-    Therefore we filter by rider.status.
-    ==================================================
+    with values:
+
+        available
+        busy
+
+    Therefore:
+
+        status === "available"
+
+    means the rider can be assigned.
+    ======================================================
     */
 
+
     const availableRiders =
-      (data.riders || [])
-        .filter(
-          function (rider) {
+      riders.filter(
+        function (rider) {
 
-            return String(
-              rider.status || ''
-            )
-              .trim()
-              .toLowerCase() ===
-              'available';
+          return String(
+            rider.status || ''
+          )
+            .trim()
+            .toLowerCase() ===
+            'available';
 
-          }
-        );
+        }
+      );
+
+
+    console.log(
+      'All riders:',
+      riders
+    );
 
 
     console.log(
@@ -1611,7 +1677,7 @@ async function showAssignRider(
   } catch (error) {
 
     console.error(
-      'Load riders for assignment error:',
+      'Unable to load riders:',
       error
     );
 
@@ -1643,9 +1709,9 @@ async function showAssignRider(
 }
 
 
-/* ==================================================
+/* ======================================================
    RENDER ASSIGNMENT RIDERS
-================================================== */
+====================================================== */
 
 function renderAssignRiders(
   riders
@@ -1714,13 +1780,9 @@ function renderAssignRiders(
 
             <button
               type="button"
-              data-rider-id="${escapeAttribute(
-                rider.id
-              )}"
+              class="assign-rider-option"
               onclick="selectRider(
-                '${escapeAttribute(
-                  rider.id
-                )}',
+                '${escapeAttribute(rider.id)}',
                 this
               )"
               style="
@@ -1824,14 +1886,20 @@ function renderAssignRiders(
 }
 
 
-/* ==================================================
+/* ======================================================
    SELECT RIDER
-================================================== */
+====================================================== */
 
 function selectRider(
   riderId,
   element
 ) {
+
+  console.log(
+    'Selected rider:',
+    riderId
+  );
+
 
   selectedRiderId =
     riderId;
@@ -1839,7 +1907,7 @@ function selectRider(
 
   const buttons =
     document.querySelectorAll(
-      '#assign-riders button'
+      '#assign-riders .assign-rider-option'
     );
 
 
@@ -1865,10 +1933,8 @@ function selectRider(
         check.style.background =
           '#fff';
 
-
         check.style.borderColor =
           '#cbd5e1';
-
 
         check.style.color =
           'transparent';
@@ -1900,10 +1966,8 @@ function selectRider(
       check.style.background =
         '#2563eb';
 
-
       check.style.borderColor =
         '#2563eb';
-
 
       check.style.color =
         '#fff';
@@ -1913,62 +1977,70 @@ function selectRider(
   }
 
 
-  const confirmButton =
+  const button =
     document.getElementById(
       'confirm-assign-btn'
     );
 
 
-  if (confirmButton) {
+  if (button) {
 
-    confirmButton.disabled =
+    button.disabled =
       false;
 
+    button.style.cursor =
+      'pointer';
+
   }
 
 }
 
 
-/* ==================================================
-   CLOSE ASSIGN MODAL
-================================================== */
-
-function closeAssignModal() {
-
-  const modal =
-    document.getElementById(
-      'assign-modal'
-    );
-
-
-  if (modal) {
-
-    modal.style.display =
-      'none';
-
-  }
-
-
-  selectedRiderId =
-    null;
-
-
-  selectedDeliveryId =
-    null;
-
-}
-
-
-/* ==================================================
-   CONFIRM RIDER ASSIGNMENT
-================================================== */
+/* ======================================================
+   CONFIRM ASSIGNMENT
+====================================================== */
 
 async function confirmAssignRider() {
 
-  if (
-    !selectedDeliveryId ||
-    !selectedRiderId
-  ) {
+  console.log(
+    '================================'
+  );
+
+  console.log(
+    'ASSIGN RIDER CLICKED'
+  );
+
+  console.log(
+    'Delivery ID:',
+    selectedDeliveryId
+  );
+
+  console.log(
+    'Rider ID:',
+    selectedRiderId
+  );
+
+  console.log(
+    '================================'
+  );
+
+
+  if (!selectedDeliveryId) {
+
+    alert(
+      'No delivery selected.'
+    );
+
+    return;
+
+  }
+
+
+  if (!selectedRiderId) {
+
+    alert(
+      'Please select a rider first.'
+    );
 
     return;
 
@@ -2011,11 +2083,21 @@ async function confirmAssignRider() {
 
   try {
 
+    const url =
+      `/api/deliveries/${encodeURIComponent(
+        selectedDeliveryId
+      )}/assign`;
+
+
+    console.log(
+      'Assignment URL:',
+      url
+    );
+
+
     const response =
       await fetch(
-        `/api/deliveries/${encodeURIComponent(
-          selectedDeliveryId
-        )}/assign`,
+        url,
         {
 
           method: 'POST',
@@ -2040,8 +2122,37 @@ async function confirmAssignRider() {
       );
 
 
-    const data =
-      await response.json();
+    console.log(
+      'Assignment HTTP status:',
+      response.status
+    );
+
+
+    const responseText =
+      await response.text();
+
+
+    console.log(
+      'Assignment server response:',
+      responseText
+    );
+
+
+    let data = {};
+
+
+    try {
+
+      data =
+        responseText
+          ? JSON.parse(responseText)
+          : {};
+
+    } catch (_) {
+
+      data = {};
+
+    }
 
 
     if (!response.ok) {
@@ -2049,14 +2160,14 @@ async function confirmAssignRider() {
       throw new Error(
         data.error ||
         data.details ||
-        'Unable to assign rider'
+        `Assignment failed: HTTP ${response.status}`
       );
 
     }
 
 
     console.log(
-      'Rider assigned:',
+      'RIDER ASSIGNED SUCCESSFULLY',
       data
     );
 
@@ -2064,13 +2175,13 @@ async function confirmAssignRider() {
     closeAssignModal();
 
 
-    await load();
+    await loadDashboard();
 
 
   } catch (error) {
 
     console.error(
-      'Assign rider error:',
+      'ASSIGN RIDER ERROR:',
       error
     );
 
@@ -2078,10 +2189,21 @@ async function confirmAssignRider() {
     if (errorBox) {
 
       errorBox.textContent =
-        error.message;
+        error.message ||
+        'Unable to assign rider.';
 
       errorBox.style.display =
         'block';
+
+    } else {
+
+      alert(
+        'ASSIGN RIDER ERROR\n\n' +
+        (
+          error.message ||
+          'Unable to assign rider.'
+        )
+      );
 
     }
 
@@ -2101,11 +2223,41 @@ async function confirmAssignRider() {
 }
 
 
-/* ==================================================
-   UPDATE DELIVERY STATUS
-================================================== */
+/* ======================================================
+   CLOSE ASSIGN MODAL
+====================================================== */
 
-async function updateStatus(
+function closeAssignModal() {
+
+  const modal =
+    document.getElementById(
+      'assign-modal'
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      'none';
+
+  }
+
+
+  selectedDeliveryId =
+    null;
+
+
+  selectedRiderId =
+    null;
+
+}
+
+
+/* ======================================================
+   UPDATE DELIVERY STATUS
+====================================================== */
+
+async function updateDeliveryStatus(
   deliveryId,
   status
 ) {
@@ -2153,8 +2305,25 @@ async function updateStatus(
       );
 
 
-    const data =
-      await response.json();
+    const text =
+      await response.text();
+
+
+    let data = {};
+
+
+    try {
+
+      data =
+        text
+          ? JSON.parse(text)
+          : {};
+
+    } catch (_) {
+
+      data = {};
+
+    }
 
 
     if (!response.ok) {
@@ -2162,7 +2331,7 @@ async function updateStatus(
       throw new Error(
         data.error ||
         data.details ||
-        'Unable to update delivery status'
+        `Status update failed: HTTP ${response.status}`
       );
 
     }
@@ -2174,19 +2343,19 @@ async function updateStatus(
     );
 
 
-    await load();
+    await loadDashboard();
 
 
   } catch (error) {
 
     console.error(
-      'Status update error:',
+      'STATUS UPDATE ERROR:',
       error
     );
 
 
     alert(
-      'Unable to update delivery:\n\n' +
+      'STATUS UPDATE ERROR\n\n' +
       error.message
     );
 
@@ -2195,9 +2364,9 @@ async function updateStatus(
 }
 
 
-/* ==================================================
-   GET INITIALS
-================================================== */
+/* ======================================================
+   INITIALS
+====================================================== */
 
 function getInitials(
   name
@@ -2238,9 +2407,9 @@ function getInitials(
 }
 
 
-/* ==================================================
-   HTML ESCAPING
-================================================== */
+/* ======================================================
+   HTML ESCAPE
+====================================================== */
 
 function escapeHtml(
   value
@@ -2280,9 +2449,9 @@ function escapeHtml(
 }
 
 
-/* ==================================================
-   ATTRIBUTE ESCAPING
-================================================== */
+/* ======================================================
+   ATTRIBUTE ESCAPE
+====================================================== */
 
 function escapeAttribute(
   value
@@ -2307,9 +2476,9 @@ function escapeAttribute(
 }
 
 
-/* ==================================================
-   ESCAPE KEY
-================================================== */
+/* ======================================================
+   ESC KEY
+====================================================== */
 
 document.addEventListener(
   'keydown',
@@ -2321,7 +2490,7 @@ document.addEventListener(
 
       closeAssignModal();
 
-      closeModal();
+      closeMainModal();
 
     }
 
@@ -2329,33 +2498,69 @@ document.addEventListener(
 );
 
 
-/* ==================================================
+/* ======================================================
    GLOBAL FUNCTIONS
-================================================== */
+======================================================
+
+   These are important because the HTML buttons use
+   onclick="..." handlers.
+====================================================== */
+
+window.loadDashboard =
+  loadDashboard;
+
+
+/*
+Compatibility with existing code
+*/
 
 window.load =
-  load;
+  loadDashboard;
+
 
 window.openModal =
   openModal;
 
+
 window.closeModal =
   closeModal;
+
+
+window.openMainModal =
+  openMainModal;
+
+
+window.closeMainModal =
+  closeMainModal;
+
 
 window.showAssignRider =
   showAssignRider;
 
+
 window.closeAssignModal =
   closeAssignModal;
+
 
 window.selectRider =
   selectRider;
 
+
 window.confirmAssignRider =
   confirmAssignRider;
+
 
 window.assignRider =
   confirmAssignRider;
 
+
+window.updateDeliveryStatus =
+  updateDeliveryStatus;
+
+
+/*
+Compatibility if existing HTML calls updateStatus()
+*/
+
 window.updateStatus =
-  updateStatus;
+  updateDeliveryStatus;
