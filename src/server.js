@@ -40,7 +40,7 @@ app.use(
 
 
 // ============================================
-// VALIDATION
+// DELIVERY VALIDATION
 // ============================================
 
 const deliverySchema = z.object({
@@ -48,10 +48,7 @@ const deliverySchema = z.object({
   customer_phone: z.string().min(9),
   delivery_address: z.string().min(3),
   item_description: z.string().min(2),
-  retailer_name: z
-    .string()
-    .min(2)
-    .default('Demo Retailer')
+  retailer_name: z.string().min(2).default('Demo Retailer')
 });
 
 
@@ -81,9 +78,9 @@ async function recordEvent(
     .from('delivery_events')
     .insert({
       delivery_id: deliveryId,
-      status,
-      source,
-      note
+      status: status,
+      source: source,
+      note: note
     });
 }
 
@@ -92,7 +89,7 @@ async function recordEvent(
 // HEALTH CHECK
 // ============================================
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', function (_req, res) {
   res.json({
     ok: true,
     service: 'reflex',
@@ -105,18 +102,9 @@ app.get('/api/health', (_req, res) => {
 // DASHBOARD
 // ============================================
 
-app.get('/api/dashboard', async (_req, res) => {
+app.get('/api/dashboard', async function (_req, res) {
   try {
-    const [
-      {
-        data: deliveries,
-        error: deliveriesError
-      },
-      {
-        data: riders,
-        error: ridersError
-      }
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase
         .from('deliveries')
         .select(
@@ -132,19 +120,33 @@ app.get('/api/dashboard', async (_req, res) => {
         .order('name')
     ]);
 
-    if (deliveriesError || ridersError) {
+    const deliveriesResult = results[0];
+    const ridersResult = results[1];
+
+    if (
+      deliveriesResult.error ||
+      ridersResult.error
+    ) {
       return res.status(500).json({
         error:
-          deliveriesError?.message ||
-          ridersError?.message ||
+          deliveriesResult.error?.message ||
+          ridersResult.error?.message ||
           'Unable to load dashboard'
       });
     }
 
+    const deliveries =
+      deliveriesResult.data || [];
+
+    const riders =
+      ridersResult.data || [];
+
     const counts = deliveries.reduce(
-      (result, delivery) => {
-        result[delivery.status] =
-          (result[delivery.status] || 0) + 1;
+      function (result, delivery) {
+        const status = delivery.status;
+
+        result[status] =
+          (result[status] || 0) + 1;
 
         return result;
       },
@@ -152,10 +154,11 @@ app.get('/api/dashboard', async (_req, res) => {
     );
 
     res.json({
-      deliveries,
-      riders,
-      counts
+      deliveries: deliveries,
+      riders: riders,
+      counts: counts
     });
+
   } catch (error) {
     console.error(
       'Dashboard error:',
@@ -173,7 +176,7 @@ app.get('/api/dashboard', async (_req, res) => {
 // CREATE DELIVERY
 // ============================================
 
-app.post('/api/deliveries', async (req, res) => {
+app.post('/api/deliveries', async function (req, res) {
   try {
     const parsed =
       deliverySchema.safeParse(req.body);
@@ -181,7 +184,9 @@ app.post('/api/deliveries', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({
         error: parsed.error.issues
-          .map(issue => issue.message)
+          .map(function (issue) {
+            return issue.message;
+          })
           .join(', ')
       });
     }
@@ -191,33 +196,34 @@ app.post('/api/deliveries', async (req, res) => {
       delivery_code: code()
     };
 
-    const {
-      data,
-      error
-    } = await supabase
+    const result = await supabase
       .from('deliveries')
       .insert(payload)
       .select()
       .single();
 
-    if (error) {
+    if (result.error) {
       console.error(
         'Create delivery error:',
-        error
+        result.error
       );
 
       return res.status(500).json({
-        error: error.message
+        error: result.error.message
       });
     }
+
+    const data = result.data;
 
     await recordEvent(
       data.id,
       'Pending',
-      'whatsapp'
+      'whatsapp',
+      null
     );
 
     res.status(201).json(data);
+
   } catch (error) {
     console.error(
       'Create delivery error:',
@@ -237,7 +243,7 @@ app.post('/api/deliveries', async (req, res) => {
 
 app.post(
   '/api/deliveries/:id/assign',
-  async (req, res) => {
+  async function (req, res) {
     try {
       const schema = z.object({
         rider_id: z.string().uuid()
@@ -253,10 +259,7 @@ app.post(
       }
 
       // Find rider
-      const {
-        data: rider,
-        error: riderError
-      } = await supabase
+      const riderResult = await supabase
         .from('riders')
         .select('*')
         .eq(
@@ -265,69 +268,99 @@ app.post(
         )
         .single();
 
-      if (riderError || !rider) {
+      if (
+        riderResult.error ||
+        !riderResult.data
+      ) {
         return res.status(404).json({
           error: 'Rider not found'
         });
       }
 
-      // Assign rider
-      const {
-        data: delivery,
-        error
-      } = await supabase
-        .from('deliveries')
-        .update({
-          rider_id: rider.id,
-          status: 'Assigned',
-          assigned_at:
-            new Date().toISOString()
-        })
-        .eq(
-          'id',
-          req.params.id
-        )
-        .select()
-        .single();
+      const rider = riderResult.data;
 
-      if (error) {
+      // Update delivery
+      const deliveryResult =
+        await supabase
+          .from('deliveries')
+          .update({
+            rider_id: rider.id,
+            status: 'Assigned',
+            assigned_at:
+              new Date().toISOString()
+          })
+          .eq(
+            'id',
+            req.params.id
+          )
+          .select()
+          .single();
+
+      if (deliveryResult.error) {
         console.error(
           'Assign rider error:',
-          error
+          deliveryResult.error
         );
 
         return res.status(500).json({
-          error: error.message
+          error:
+            deliveryResult.error.message
         });
       }
 
-// Record event
-await recordEvent(
-  delivery.id,
-  'Assigned',
-  'dashboard',
-  'Assigned to ' + rider.name
-);
+      const delivery =
+        deliveryResult.data;
+
+      // Record assignment event
+      await recordEvent(
+        delivery.id,
+        'Assigned',
+        'dashboard',
+        'Assigned to ' + rider.name
+      );
 
       // Send SMS
-try {
-  await sendSms({
-    to: rider.phone,
-    message:
-      'Reflex delivery ' + delivery.delivery_code + '\n' +
-      'Pickup for: ' + delivery.item_description + '\n' +
-      'Customer: ' + delivery.customer_name + '\n' +
-      'Location: ' + delivery.delivery_address + '\n' +
-      'Reply PICKED ' + delivery.delivery_code + ' when collected.'
-  });
-} catch (error) {
-  console.error(
-    'SMS error:',
-    error.message
-  );
-}
+      try {
+        await sendSms({
+          to: rider.phone,
+          message:
+            'Reflex delivery ' +
+            delivery.delivery_code +
+            '\n' +
+            'Pickup for: ' +
+            delivery.item_description +
+            '\n' +
+            'Customer: ' +
+            delivery.customer_name +
+            '\n' +
+            'Location: ' +
+            delivery.delivery_address +
+            '\n' +
+            'Reply PICKED ' +
+            delivery.delivery_code +
+            ' when collected.'
+        });
+      } catch (error) {
+        console.error(
+          'SMS error:',
+          error.message
+        );
+      }
 
-res.json(delivery);
+      res.json(delivery);
+
+    } catch (error) {
+      console.error(
+        'Assign rider error:',
+        error
+      );
+
+      res.status(500).json({
+        error: 'Unable to assign rider'
+      });
+    }
+  }
+);
 
 
 // ============================================
@@ -346,7 +379,7 @@ const statusSchema = z.object({
 
 app.post(
   '/api/deliveries/:id/status',
-  async (req, res) => {
+  async function (req, res) {
     try {
       const parsed =
         statusSchema.safeParse(req.body);
@@ -383,31 +416,31 @@ app.post(
         fields.failed_at = now;
       }
 
-      const {
-        data,
-        error
-      } = await supabase
-        .from('deliveries')
-        .update(fields)
-        .eq(
-          'id',
-          req.params.id
-        )
-        .select(
-          '*, rider:riders(*)'
-        )
-        .single();
+      const result =
+        await supabase
+          .from('deliveries')
+          .update(fields)
+          .eq(
+            'id',
+            req.params.id
+          )
+          .select(
+            '*, rider:riders(*)'
+          )
+          .single();
 
-      if (error) {
+      if (result.error) {
         console.error(
           'Status update error:',
-          error
+          result.error
         );
 
         return res.status(500).json({
-          error: error.message
+          error: result.error.message
         });
       }
+
+      const data = result.data;
 
       await recordEvent(
         data.id,
@@ -417,6 +450,7 @@ app.post(
       );
 
       res.json(data);
+
     } catch (error) {
       console.error(
         'Status update error:',
@@ -432,13 +466,12 @@ app.post(
 
 
 // ============================================
-// WHATSAPP WEBHOOK
+// WHATSAPP WEBHOOK VERIFICATION
 // ============================================
 
-// Meta verification
 app.get(
   '/api/whatsapp/webhook',
-  (req, res) => {
+  function (req, res) {
     const mode =
       req.query['hub.mode'];
 
@@ -458,15 +491,18 @@ app.get(
         .send(challenge);
     }
 
-    res.sendStatus(403);
+    return res.sendStatus(403);
   }
 );
 
 
-// WhatsApp inbound messages
+// ============================================
+// WHATSAPP WEBHOOK
+// ============================================
+
 app.post(
   '/api/whatsapp/webhook',
-  async (req, res) => {
+  async function (req, res) {
     try {
       console.log(
         'WhatsApp webhook received'
@@ -481,49 +517,44 @@ app.post(
       );
 
       /*
-       * Production implementation will:
+       * Production implementation:
        *
-       * 1. Read the WhatsApp sender
-       * 2. Read the retailer message
-       * 3. Extract customer details
+       * 1. Read WhatsApp sender
+       * 2. Read retailer message
+       * 3. Extract delivery details
        * 4. Validate the information
-       * 5. Create a delivery
-       * 6. Send confirmation back to retailer
+       * 5. Create delivery
+       * 6. Send confirmation
        */
 
-      res.sendStatus(200);
+      return res.sendStatus(200);
+
     } catch (error) {
       console.error(
         'WhatsApp webhook error:',
         error
       );
 
-      // Always acknowledge Meta webhook requests
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }
   }
 );
 
 
 // ============================================
-// 404 API HANDLER + FRONTEND FALLBACK
+// API 404 + FRONTEND FALLBACK
 // ============================================
 //
 // IMPORTANT:
-//
-// Do NOT use:
+// We intentionally do NOT use:
 //
 // app.get('*', ...)
 //
-// Current Express/router versions reject
-// the "*" route pattern.
-//
-// app.use() is used instead and is placed
-// AFTER all API routes.
+// because newer Express/router versions
+// reject that wildcard syntax.
 //
 
-app.use((req, res) => {
-  // Unknown API endpoint
+app.use(function (req, res) {
   if (
     req.path.startsWith('/api/')
   ) {
@@ -532,8 +563,7 @@ app.use((req, res) => {
     });
   }
 
-  // Frontend fallback
-  res.sendFile(
+  return res.sendFile(
     path.join(
       __dirname,
       '..',
@@ -555,10 +585,10 @@ const port = Number(
 app.listen(
   port,
   '0.0.0.0',
-  () => {
+  function () {
     console.log(
-      'Reflex listening on 0.0.0.0:' + port
+      'Reflex listening on 0.0.0.0:' +
+      port
     );
   }
 );
-
