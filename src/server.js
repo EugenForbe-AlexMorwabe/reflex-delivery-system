@@ -301,13 +301,13 @@ app.post(
         });
       }
 
-      // Record event
-      await recordEvent(
-        delivery.id,
-        'Assigned',
-        'dashboard',
-        `Assigned to ${rider.name}`
-      );
+// Record event
+await recordEvent(
+  delivery.id,
+  'Assigned',
+  'dashboard',
+  'Assigned to ' + rider.name
+);
 
       // Send SMS
       try {
