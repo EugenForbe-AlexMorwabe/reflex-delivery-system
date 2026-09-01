@@ -571,7 +571,7 @@ app.listen(
   '0.0.0.0',
   () => {
     console.log(
-      `Reflex listening on 0.0.0.0:${port}`
+      'Reflex listening on 0.0.0.0:' + port
     );
   }
 );
