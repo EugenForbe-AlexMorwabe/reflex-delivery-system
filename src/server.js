@@ -60,7 +60,10 @@ const deliverySchema = z.object({
 // ============================================
 
 function code() {
-  return `RFX-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`;
+  return 'RFX-' +
+    Date.now().toString(36).toUpperCase() +
+    '-' +
+    Math.floor(Math.random() * 900 + 100);
 }
 
 
