@@ -321,27 +321,13 @@ try {
       'Reply PICKED ' + delivery.delivery_code + ' when collected.'
   });
 } catch (error) {
-  console.error('SMS error:', error.message);
-} catch (error) {
-        console.error(
-          'SMS error:',
-          error.message
-        );
-      }
+  console.error(
+    'SMS error:',
+    error.message
+  );
+}
 
-      res.json(delivery);
-    } catch (error) {
-      console.error(
-        'Assign rider error:',
-        error
-      );
-
-      res.status(500).json({
-        error: 'Unable to assign rider'
-      });
-    }
-  }
-);
+res.json(delivery);
 
 
 // ============================================
