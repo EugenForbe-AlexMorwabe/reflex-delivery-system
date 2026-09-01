@@ -1,5 +1,7 @@
 'use strict';
 
+console.log('🔥 REFLEX APP.JS LOADED - NEW VERSION 🔥');
+
 /*
 ========================================================
 REFLEX DELIVERY SYSTEM
@@ -1339,28 +1341,23 @@ function setupAssignModal() {
 
   /* Confirm assignment button */
 
-  const confirmButton =
-    document.getElementById('confirm-assign-btn');
+  document.addEventListener('click', function (event) {
 
-  if (confirmButton) {
+  const button =
+    event.target.closest('#confirm-assign-btn');
 
-    confirmButton.addEventListener(
-      'click',
-      function (event) {
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        console.log(
-          'ASSIGN RIDER BUTTON CLICKED'
-        );
-
-        confirmAssignRider();
-
-      }
-    );
-
+  if (!button) {
+    return;
   }
+
+  console.log('🔥 ASSIGN BUTTON CLICK DETECTED 🔥');
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  confirmAssignRider();
+
+});
 
 
   /* Close when clicking outside */
@@ -1426,10 +1423,24 @@ async function showAssignRider(
     );
 
 
-  const confirmButton =
-    document.getElementById(
-      'confirm-assign-btn'
-    );
+const confirmButton =
+  document.getElementById('confirm-assign-btn');
+
+if (confirmButton) {
+
+  confirmButton.disabled = false;
+
+  confirmButton.removeAttribute('disabled');
+
+  confirmButton.style.pointerEvents = 'auto';
+
+  confirmButton.style.cursor = 'pointer';
+
+  console.log(
+    'Assign button enabled'
+  );
+
+}
 
 
   if (!modal) {
@@ -2585,3 +2596,20 @@ Compatibility if existing HTML calls updateStatus()
 
 window.updateStatus =
   updateDeliveryStatus;
+document.addEventListener('click', function (event) {
+
+  const button =
+    event.target.closest('#confirm-assign-btn');
+
+  if (!button) {
+    return;
+  }
+
+  console.log('🔥 ASSIGN BUTTON CLICK DETECTED 🔥');
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  confirmAssignRider();
+
+});
