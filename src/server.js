@@ -102,75 +102,118 @@ app.get('/api/health', function (_req, res) {
 // DASHBOARD
 // ============================================
 
-app.get('/api/dashboard', async function (_req, res) {
+app.get('/api/dashboard', async (req, res) => {
   try {
-    const results = await Promise.all([
-      supabase
-        .from('deliveries')
-        .select(
-          '*, rider:riders(id,name,phone,vehicle,is_available)'
-        )
-        .order('created_at', {
-          ascending: false
-        }),
+    console.log('Loading dashboard data...');
 
-      supabase
-        .from('riders')
-        .select('*')
-        .order('name')
-    ]);
+    // Get deliveries
+    const {
+      data: deliveries,
+      error: deliveryError
+    } = await supabase
+      .from('deliveries')
+      .select('*')
+      .order('created_at', {
+        ascending: false
+      });
 
-    const deliveriesResult = results[0];
-    const ridersResult = results[1];
+    if (deliveryError) {
+      console.error(
+        'DELIVERIES QUERY ERROR:',
+        deliveryError
+      );
 
-    if (
-      deliveriesResult.error ||
-      ridersResult.error
-    ) {
       return res.status(500).json({
-        error:
-          deliveriesResult.error?.message ||
-          ridersResult.error?.message ||
-          'Unable to load dashboard'
+        error: 'Unable to load deliveries',
+        details: deliveryError.message
       });
     }
 
-    const deliveries =
-      deliveriesResult.data || [];
+    // Get riders separately
+    const {
+      data: riders,
+      error: riderError
+    } = await supabase
+      .from('riders')
+      .select('*')
+      .order('name', {
+        ascending: true
+      });
 
-    const riders =
-      ridersResult.data || [];
+    if (riderError) {
+      console.error(
+        'RIDERS QUERY ERROR:',
+        riderError
+      );
 
-    const counts = deliveries.reduce(
-      function (result, delivery) {
-        const status = delivery.status;
+      return res.status(500).json({
+        error: 'Unable to load riders',
+        details: riderError.message
+      });
+    }
 
-        result[status] =
-          (result[status] || 0) + 1;
-
-        return result;
-      },
-      {}
+    // Attach rider information to each delivery
+    const riderMap = new Map(
+      (riders || []).map(function (rider) {
+        return [
+          rider.id,
+          rider
+        ];
+      })
     );
 
-    res.json({
-      deliveries: deliveries,
-      riders: riders,
+    const enrichedDeliveries =
+      (deliveries || []).map(function (delivery) {
+        return {
+          ...delivery,
+          rider:
+            delivery.rider_id
+              ? riderMap.get(
+                  delivery.rider_id
+                ) || null
+              : null
+        };
+      });
+
+    // Calculate status counts
+    const counts =
+      enrichedDeliveries.reduce(
+        function (result, delivery) {
+          const status =
+            delivery.status || 'Pending';
+
+          result[status] =
+            (result[status] || 0) + 1;
+
+          return result;
+        },
+        {}
+      );
+
+    console.log(
+      `Dashboard loaded: ${enrichedDeliveries.length} deliveries, ${riders.length} riders`
+    );
+
+    return res.json({
+      deliveries: enrichedDeliveries,
+      riders: riders || [],
       counts: counts
     });
 
   } catch (error) {
     console.error(
-      'Dashboard error:',
+      'DASHBOARD ERROR:',
       error
     );
 
-    res.status(500).json({
-      error: 'Unable to load dashboard'
+    return res.status(500).json({
+      error: 'Unable to load dashboard',
+      details:
+        error.message ||
+        'Unknown server error'
     });
   }
 });
-
 
 // ============================================
 // CREATE DELIVERY
