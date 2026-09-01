@@ -182,3 +182,151 @@ input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
   font-size: 11px;
   line-height: 1.5;
 }
+/* ============================================
+   ASSIGN RIDER MODAL
+   ============================================ */
+
+.assign-card {
+  max-width: 500px;
+}
+
+.rider-modal-icon {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.assign-delivery-summary {
+  margin-top: 18px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.assign-delivery-summary strong {
+  display: block;
+  color: var(--navy);
+  font-size: 12px;
+}
+
+.assign-delivery-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.assign-riders {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+  max-height: 270px;
+  overflow-y: auto;
+}
+
+.assign-rider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color .15s,
+    background .15s,
+    transform .15s;
+}
+
+.assign-rider:hover {
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  transform: translateY(-1px);
+}
+
+.assign-rider.selected {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.assign-rider-avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #eff6ff;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.assign-rider-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.assign-rider-name {
+  display: block;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assign-rider-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+.assign-rider-check {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.assign-rider.selected .assign-rider-check {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.assign-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 11px;
+}
+
+#confirm-assign-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+#confirm-assign-btn.loading {
+  opacity: .7;
+  pointer-events: none;
+}
+
+@media(max-width:500px) {
+  .assign-card {
+    padding: 21px;
+  }
+
+  .assign-riders {
+    max-height: 230px;
+  }
+}
