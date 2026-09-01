@@ -310,17 +310,19 @@ await recordEvent(
 );
 
       // Send SMS
-      try {
-        await sendSms({
-          to: rider.phone,
-          message:
-            `Reflex delivery ${delivery.delivery_code}\n` +
-            `Pickup for: ${delivery.item_description}\n` +
-            `Customer: ${delivery.customer_name}\n` +
-            `Location: ${delivery.delivery_address}\n` +
-            `Reply PICKED ${delivery.delivery_code} when collected.`
-        });
-      } catch (error) {
+try {
+  await sendSms({
+    to: rider.phone,
+    message:
+      'Reflex delivery ' + delivery.delivery_code + '\n' +
+      'Pickup for: ' + delivery.item_description + '\n' +
+      'Customer: ' + delivery.customer_name + '\n' +
+      'Location: ' + delivery.delivery_address + '\n' +
+      'Reply PICKED ' + delivery.delivery_code + ' when collected.'
+  });
+} catch (error) {
+  console.error('SMS error:', error.message);
+} catch (error) {
         console.error(
           'SMS error:',
           error.message
