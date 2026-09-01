@@ -1,4 +1,4 @@
-```javascript
+
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -575,4 +575,4 @@ app.listen(
     );
   }
 );
-```
+
