@@ -1,14 +1,36 @@
+// ============================================
+// REFLEX DELIVERY SYSTEM
+// Dashboard Frontend
+// ============================================
+
+'use strict';
+
+
+// ============================================
+// LOAD DASHBOARD
+// ============================================
+
 async function load() {
   try {
-    var response = await fetch('/api/dashboard');
+    const response = await fetch('/api/dashboard', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await response.json();
 
     if (!response.ok) {
       throw new Error(
-        'Dashboard request failed: ' + response.status
+        data.details ||
+        data.error ||
+        `Dashboard request failed: ${response.status}`
       );
     }
 
-    var data = await response.json();
+    console.log('Dashboard data loaded:', data);
 
     renderStats(data.counts || {});
     renderDeliveries(data.deliveries || []);
@@ -17,15 +39,35 @@ async function load() {
   } catch (error) {
     console.error('Dashboard loading error:', error);
 
-    var ridersElement = document.getElementById('riders');
+    renderDashboardError(error.message);
+  }
+}
 
-    if (ridersElement) {
-      ridersElement.innerHTML =
-        '<div class="empty-state">' +
-        '<strong>Unable to load riders</strong>' +
-        '<span>' + escapeHtml(error.message) + '</span>' +
-        '</div>';
-    }
+
+// ============================================
+// DASHBOARD ERROR
+// ============================================
+
+function renderDashboardError(message) {
+  const queue = document.getElementById('queue');
+  const riders = document.getElementById('riders');
+
+  if (queue) {
+    queue.innerHTML = `
+      <div class="empty-state">
+        <strong>Unable to load deliveries</strong>
+        <span>${escapeHtml(message)}</span>
+      </div>
+    `;
+  }
+
+  if (riders) {
+    riders.innerHTML = `
+      <div class="empty-state">
+        <strong>Unable to load riders</strong>
+        <span>${escapeHtml(message)}</span>
+      </div>
+    `;
   }
 }
 
@@ -35,254 +77,387 @@ async function load() {
 // ============================================
 
 function renderStats(counts) {
-  var stats = document.getElementById('stats');
+  const stats = document.getElementById('stats');
 
   if (!stats) {
+    console.error('Element #stats not found');
     return;
   }
 
-  function getCount(status) {
-    var key = Object.keys(counts || {}).find(function (key) {
-      return key.toLowerCase() === status.toLowerCase();
-    });
+  const pending = getStatusCount(counts, 'Pending');
+  const assigned = getStatusCount(counts, 'Assigned');
+  const pickedUp = getStatusCount(counts, 'Picked Up');
+  const delivered = getStatusCount(counts, 'Delivered');
 
-    return key ? counts[key] : 0;
-  }
-
-  var pending = getCount('Pending');
-  var assigned = getCount('Assigned');
-  var pickedUp = getCount('Picked Up');
-  var delivered = getCount('Delivered');
-
-  stats.innerHTML =
-    statCard(
+  stats.innerHTML = `
+    ${statCard(
       pending,
       'Pending',
       'Requests waiting for assignment'
-    ) +
-    statCard(
+    )}
+
+    ${statCard(
       assigned,
       'Assigned',
       'Riders assigned'
-    ) +
-    statCard(
+    )}
+
+    ${statCard(
       pickedUp,
       'Picked Up',
       'Orders on the road'
-    ) +
-    statCard(
+    )}
+
+    ${statCard(
       delivered,
       'Delivered',
       'Completed deliveries'
-    );
+    )}
+  `;
 }
+
+
+// ============================================
+// STATUS COUNT
+// Handles Pending / pending / PENDING
+// ============================================
+
+function getStatusCount(counts, status) {
+  if (!counts || typeof counts !== 'object') {
+    return 0;
+  }
+
+  const matchingKey = Object.keys(counts).find(
+    key =>
+      String(key).trim().toLowerCase() ===
+      status.trim().toLowerCase()
+  );
+
+  if (!matchingKey) {
+    return 0;
+  }
+
+  return Number(counts[matchingKey]) || 0;
+}
+
+
+// ============================================
+// STAT CARD
+// ============================================
+
+function statCard(number, label, description) {
+  return `
+    <div class="stat">
+      <b>${number}</b>
+      <span>${escapeHtml(label)}</span>
+      <small>${escapeHtml(description)}</small>
+    </div>
+  `;
+}
+
 
 // ============================================
 // RIDERS
 // ============================================
 
 function renderRiders(riders) {
-  var container = document.getElementById('riders');
+  const container = document.getElementById('riders');
 
   if (!container) {
-    console.error(
-      'Could not find #riders element'
-    );
-
+    console.error('Element #riders not found');
     return;
   }
 
-  if (!riders || riders.length === 0) {
-    container.innerHTML =
-      '<div class="empty-state">' +
-        '<strong>No riders found</strong>' +
-        '<span>Your Supabase riders table is empty, or the API returned no riders.</span>' +
-      '</div>';
+  if (!Array.isArray(riders) || riders.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <strong>No riders found</strong>
+        <span>
+          No riders were returned from the database.
+        </span>
+      </div>
+    `;
 
     return;
   }
 
   container.innerHTML = riders
-    .map(function (rider) {
-      return renderRider(rider);
-    })
+    .map(renderRider)
     .join('');
 }
 
 
+// ============================================
+// SINGLE RIDER
+// ============================================
+
 function renderRider(rider) {
-  var available =
-    rider.is_available === true;
+  const name =
+    rider.name || 'Unnamed Rider';
 
-  var statusText =
-    available ? 'Available' : 'Busy';
+  const phone =
+    rider.phone || 'No phone';
 
-  var statusClass =
-    available ? 'available' : 'busy';
-
-  var vehicle =
+  const vehicle =
     rider.vehicle || 'Motorcycle';
 
-  var phone =
-    rider.phone || 'No phone number';
+  const isAvailable =
+    rider.is_available === true ||
+    rider.is_available === 'true';
 
-  return (
-    '<div class="rider-card">' +
+  const status =
+    isAvailable
+      ? 'Available'
+      : 'Busy';
 
-      '<div class="rider-avatar">' +
-        escapeHtml(
-          getInitials(rider.name || 'Rider')
-        ) +
-      '</div>' +
+  const statusClass =
+    isAvailable
+      ? 'available'
+      : 'busy';
 
-      '<div class="rider-info">' +
+  const initials =
+    getInitials(name);
 
-        '<div class="rider-top">' +
-          '<strong>' +
-            escapeHtml(rider.name || 'Unnamed rider') +
-          '</strong>' +
+  return `
+    <div class="rider-card">
 
-          '<span class="rider-status ' +
-            statusClass +
-          '">' +
-            '<i></i>' +
-            escapeHtml(statusText) +
-          '</span>' +
-        '</div>' +
+      <div class="rider-avatar">
+        ${escapeHtml(initials)}
+      </div>
 
-        '<div class="rider-details">' +
-          '<span>' +
-            escapeHtml(vehicle) +
-          '</span>' +
+      <div class="rider-info">
 
-          '<span>' +
-            escapeHtml(phone) +
-          '</span>' +
-        '</div>' +
+        <div class="rider-top">
 
-      '</div>' +
+          <strong>
+            ${escapeHtml(name)}
+          </strong>
 
-    '</div>'
-  );
+          <span class="rider-status ${statusClass}">
+            <i></i>
+            ${status}
+          </span>
+
+        </div>
+
+        <div class="rider-details">
+
+          <span>
+            ${escapeHtml(vehicle)}
+          </span>
+
+          <span>
+            ${escapeHtml(phone)}
+          </span>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
 }
 
 
 // ============================================
-// DELIVERIES
+// DELIVERY QUEUE
 // ============================================
 
 function renderDeliveries(deliveries) {
-  var container =
+  const container =
     document.getElementById('queue');
 
   if (!container) {
+    console.error('Element #queue not found');
     return;
   }
 
-  if (!deliveries || deliveries.length === 0) {
-    container.innerHTML =
-      '<div class="empty-state">' +
-        '<strong>No deliveries yet</strong>' +
-        '<span>Create a delivery request to see it here.</span>' +
-      '</div>';
+  if (
+    !Array.isArray(deliveries) ||
+    deliveries.length === 0
+  ) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <strong>No deliveries yet</strong>
+        <span>
+          Create a delivery request to see it here.
+        </span>
+      </div>
+    `;
 
     return;
   }
 
   container.innerHTML = deliveries
-    .map(function (delivery) {
-      return renderDelivery(delivery);
-    })
+    .map(renderDelivery)
     .join('');
 }
 
 
+// ============================================
+// SINGLE DELIVERY
+// ============================================
+
 function renderDelivery(delivery) {
-  var riderName =
+  const code =
+    delivery.delivery_code ||
+    'No delivery code';
+
+  const customer =
+    delivery.customer_name ||
+    'Unknown customer';
+
+  const address =
+    delivery.delivery_address ||
+    'No address';
+
+  const status =
+    normalizeStatus(
+      delivery.status || 'Pending'
+    );
+
+  const rider =
     delivery.rider &&
     delivery.rider.name
       ? delivery.rider.name
       : 'Unassigned';
 
-  var status =
-    delivery.status || 'Pending';
-
-  var statusClass =
-    status
-      .toLowerCase()
-      .replace(/\s+/g, '-');
-
-  var actions = '';
+  let actionButtons = '';
 
   if (status === 'Pending') {
-    actions =
-      '<button onclick="showAssignRider(\'' +
-      escapeAttribute(delivery.id) +
-      '\')">' +
-      'Assign rider' +
-      '</button>';
+    actionButtons = `
+      <button
+        type="button"
+        onclick="showAssignRider('${escapeAttribute(delivery.id)}')"
+      >
+        Assign rider
+      </button>
+    `;
   }
 
   if (status === 'Assigned') {
-    actions =
-      '<button onclick="updateStatus(\'' +
-      escapeAttribute(delivery.id) +
-      '\', \'Picked Up\')">' +
-      'Mark picked up' +
-      '</button>';
+    actionButtons = `
+      <button
+        type="button"
+        onclick="updateStatus(
+          '${escapeAttribute(delivery.id)}',
+          'Picked Up'
+        )"
+      >
+        Mark picked up
+      </button>
+    `;
   }
 
   if (status === 'Picked Up') {
-    actions =
-      '<button onclick="updateStatus(\'' +
-      escapeAttribute(delivery.id) +
-      '\', \'Delivered\')">' +
-      'Mark delivered' +
-      '</button>';
+    actionButtons = `
+      <button
+        type="button"
+        onclick="updateStatus(
+          '${escapeAttribute(delivery.id)}',
+          'Delivered'
+        )"
+      >
+        Mark delivered
+      </button>
+
+      <button
+        type="button"
+        onclick="updateStatus(
+          '${escapeAttribute(delivery.id)}',
+          'Failed'
+        )"
+      >
+        Mark failed
+      </button>
+    `;
   }
 
-  return (
-    '<div class="delivery">' +
+  return `
+    <div class="delivery">
 
-      '<div class="row">' +
-        '<div>' +
-          '<strong>' +
-            escapeHtml(
-              delivery.delivery_code || 'No code'
-            ) +
-          '</strong>' +
+      <div class="row">
 
-          '<div class="muted">' +
-            escapeHtml(
-              delivery.customer_name || ''
-            ) +
-          '</div>' +
-        '</div>' +
+        <div>
 
-        '<span class="pill status-' +
-          statusClass +
-        '">' +
-          escapeHtml(status) +
-        '</span>' +
-      '</div>' +
+          <strong>
+            ${escapeHtml(code)}
+          </strong>
 
-      '<div class="muted" style="margin-top:8px">' +
-        escapeHtml(
-          delivery.delivery_address || ''
-        ) +
-      '</div>' +
+          <div class="muted">
+            ${escapeHtml(customer)}
+          </div>
 
-      '<div class="muted" style="margin-top:5px">' +
-        'Rider: ' +
-        escapeHtml(riderName) +
-      '</div>' +
+        </div>
 
-      '<div class="actions">' +
-        actions +
-      '</div>' +
+        <span class="pill">
+          ${escapeHtml(status)}
+        </span>
 
-    '</div>'
-  );
+      </div>
+
+      <div
+        class="muted"
+        style="margin-top:8px"
+      >
+        ${escapeHtml(address)}
+      </div>
+
+      <div
+        class="muted"
+        style="margin-top:5px"
+      >
+        Rider:
+        ${escapeHtml(rider)}
+      </div>
+
+      ${
+        actionButtons
+          ? `
+            <div class="actions">
+              ${actionButtons}
+            </div>
+          `
+          : ''
+      }
+
+    </div>
+  `;
+}
+
+
+// ============================================
+// NORMALIZE STATUS
+// ============================================
+
+function normalizeStatus(status) {
+  const value =
+    String(status || '')
+      .trim()
+      .toLowerCase();
+
+  switch (value) {
+
+    case 'pending':
+      return 'Pending';
+
+    case 'assigned':
+      return 'Assigned';
+
+    case 'picked up':
+    case 'picked_up':
+    case 'pickedup':
+      return 'Picked Up';
+
+    case 'delivered':
+      return 'Delivered';
+
+    case 'failed':
+      return 'Failed';
+
+    default:
+      return status || 'Pending';
+  }
 }
 
 
@@ -292,61 +467,71 @@ function renderDelivery(delivery) {
 
 async function showAssignRider(deliveryId) {
   try {
-    var response =
-      await fetch('/api/dashboard');
+
+    const response =
+      await fetch('/api/dashboard', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        },
+        cache: 'no-store'
+      });
+
+    const data =
+      await response.json();
 
     if (!response.ok) {
       throw new Error(
+        data.details ||
+        data.error ||
         'Unable to load riders'
       );
     }
 
-    var data =
-      await response.json();
+    const availableRiders =
+      (data.riders || []).filter(
+        rider =>
+          rider.is_available === true ||
+          rider.is_available === 'true'
+      );
 
-    var riders =
-      (data.riders || [])
-        .filter(function (rider) {
-          return rider.is_available === true;
-        });
-
-    if (riders.length === 0) {
+    if (availableRiders.length === 0) {
       alert(
-        'There are no available riders.'
+        'There are currently no available riders.'
       );
 
       return;
     }
 
-    var message =
-      'Available riders:\n\n';
+    let message =
+      'AVAILABLE RIDERS\n\n';
 
-    riders.forEach(function (rider, index) {
-      message +=
-        (index + 1) +
-        '. ' +
-        rider.name +
-        ' - ' +
-        (rider.vehicle || 'Motorcycle') +
-        '\n';
-    });
+    availableRiders.forEach(
+      (rider, index) => {
+
+        message +=
+          `${index + 1}. ` +
+          `${rider.name || 'Unnamed rider'} ` +
+          `(${rider.vehicle || 'Motorcycle'})\n`;
+      }
+    );
 
     message +=
-      '\nEnter the number of the rider to assign:';
+      '\nEnter the rider number:';
 
-    var choice =
-      prompt(message);
+    const choice =
+      window.prompt(message);
 
     if (!choice) {
       return;
     }
 
-    var index =
+    const selectedIndex =
       Number(choice) - 1;
 
     if (
-      !Number.isInteger(index) ||
-      !riders[index]
+      !Number.isInteger(selectedIndex) ||
+      !availableRiders[selectedIndex]
     ) {
       alert(
         'Invalid rider selection.'
@@ -355,52 +540,67 @@ async function showAssignRider(deliveryId) {
       return;
     }
 
+    const rider =
+      availableRiders[selectedIndex];
+
     await assignRider(
       deliveryId,
-      riders[index].id
+      rider.id
     );
 
   } catch (error) {
+
     console.error(
       'Assign rider error:',
       error
     );
 
     alert(
-      'Unable to assign rider: ' +
+      'Unable to assign rider:\n' +
       error.message
     );
   }
 }
 
 
+// ============================================
+// SEND RIDER ASSIGNMENT
+// ============================================
+
 async function assignRider(
   deliveryId,
   riderId
 ) {
-  var response =
+
+  const response =
     await fetch(
-      '/api/deliveries/' +
-      encodeURIComponent(deliveryId) +
-      '/assign',
+      `/api/deliveries/${encodeURIComponent(
+        deliveryId
+      )}/assign`,
       {
         method: 'POST',
+
         headers: {
           'Content-Type':
+            'application/json',
+
+          'Accept':
             'application/json'
         },
+
         body: JSON.stringify({
           rider_id: riderId
         })
       }
     );
 
-  var data =
+  const data =
     await response.json();
 
   if (!response.ok) {
     throw new Error(
       data.error ||
+      data.details ||
       'Unable to assign rider'
     );
   }
@@ -417,44 +617,53 @@ async function updateStatus(
   deliveryId,
   status
 ) {
+
   try {
-    var response =
+
+    const response =
       await fetch(
-        '/api/deliveries/' +
-        encodeURIComponent(deliveryId) +
-        '/status',
+        `/api/deliveries/${encodeURIComponent(
+          deliveryId
+        )}/status`,
         {
           method: 'POST',
+
           headers: {
             'Content-Type':
+              'application/json',
+
+            'Accept':
               'application/json'
           },
+
           body: JSON.stringify({
             status: status
           })
         }
       );
 
-    var data =
+    const data =
       await response.json();
 
     if (!response.ok) {
       throw new Error(
         data.error ||
-        'Unable to update status'
+        data.details ||
+        'Unable to update delivery status'
       );
     }
 
     await load();
 
   } catch (error) {
+
     console.error(
       'Status update error:',
       error
     );
 
     alert(
-      'Unable to update delivery: ' +
+      'Unable to update delivery:\n' +
       error.message
     );
   }
@@ -466,22 +675,32 @@ async function updateStatus(
 // ============================================
 
 function openModal() {
-  var modal =
+
+  const modal =
     document.getElementById('modal');
 
-  if (modal) {
-    modal.style.display = 'flex';
+  if (!modal) {
+    return;
   }
+
+  modal.style.display = 'flex';
 }
 
 
+// ============================================
+// CLOSE MODAL
+// ============================================
+
 function closeModal() {
-  var modal =
+
+  const modal =
     document.getElementById('modal');
 
-  if (modal) {
-    modal.style.display = 'none';
+  if (!modal) {
+    return;
   }
+
+  modal.style.display = 'none';
 }
 
 
@@ -492,19 +711,22 @@ function closeModal() {
 document.addEventListener(
   'DOMContentLoaded',
   function () {
-    var form =
+
+    const form =
       document.getElementById('form');
 
     if (form) {
+
       form.addEventListener(
         'submit',
         async function (event) {
+
           event.preventDefault();
 
-          var formData =
+          const formData =
             new FormData(form);
 
-          var payload = {
+          const payload = {
             customer_name:
               formData.get(
                 'customer_name'
@@ -532,39 +754,48 @@ document.addEventListener(
           };
 
           try {
-            var response =
+
+            const response =
               await fetch(
                 '/api/deliveries',
                 {
                   method: 'POST',
+
                   headers: {
                     'Content-Type':
+                      'application/json',
+
+                    'Accept':
                       'application/json'
                   },
+
                   body:
-                    JSON.stringify(payload)
+                    JSON.stringify(
+                      payload
+                    )
                 }
               );
 
-            var data =
+            const data =
               await response.json();
 
             if (!response.ok) {
               throw new Error(
                 data.error ||
+                data.details ||
                 'Unable to create delivery'
               );
             }
 
             form.reset();
 
-            var retailer =
+            const retailerInput =
               form.querySelector(
                 '[name="retailer_name"]'
               );
 
-            if (retailer) {
-              retailer.value =
+            if (retailerInput) {
+              retailerInput.value =
                 'Demo Retailer';
             }
 
@@ -573,13 +804,14 @@ document.addEventListener(
             await load();
 
           } catch (error) {
+
             console.error(
               'Create delivery error:',
               error
             );
 
             alert(
-              'Unable to create delivery: ' +
+              'Unable to create delivery:\n' +
               error.message
             );
           }
@@ -587,7 +819,46 @@ document.addEventListener(
       );
     }
 
+
+    // Close modal when clicking
+    // outside the modal card
+    const modal =
+      document.getElementById('modal');
+
+    if (modal) {
+
+      modal.addEventListener(
+        'click',
+        function (event) {
+
+          if (event.target === modal) {
+            closeModal();
+          }
+
+        }
+      );
+    }
+
+
+    // Initial dashboard load
     load();
+
+  }
+);
+
+
+// ============================================
+// KEYBOARD SUPPORT
+// ============================================
+
+document.addEventListener(
+  'keydown',
+  function (event) {
+
+    if (event.key === 'Escape') {
+      closeModal();
+    }
+
   }
 );
 
@@ -597,7 +868,8 @@ document.addEventListener(
 // ============================================
 
 function getInitials(name) {
-  var parts =
+
+  const parts =
     String(name)
       .trim()
       .split(/\s+/)
@@ -620,8 +892,15 @@ function getInitials(name) {
 }
 
 
+// ============================================
+// HTML ESCAPING
+// ============================================
+
 function escapeHtml(value) {
-  return String(value == null ? '' : value)
+
+  return String(
+    value == null ? '' : value
+  )
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -630,8 +909,15 @@ function escapeHtml(value) {
 }
 
 
+// ============================================
+// ATTRIBUTE ESCAPING
+// ============================================
+
 function escapeAttribute(value) {
-  return String(value == null ? '' : value)
+
+  return String(
+    value == null ? '' : value
+  )
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'");
 }
