@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reflex — Delivery Management</title><link rel="stylesheet" href="/styles.css"></head>
+<body><div class="shell">
+<header><div><div class="eyebrow">REFLEX DELIVERY SYSTEM</div><h1>Delivery operations, under control.</h1><p>WhatsApp requests → dispatcher queue → rider assignment → delivery status.</p></div><button class="primary" onclick="openModal()">+ New delivery</button></header>
+<section class="stats" id="stats"></section>
+<main><section class="panel"><div class="panel-head"><h2>Delivery queue</h2><button class="ghost" onclick="load()">Refresh</button></div><div id="queue" class="queue"></div></section><aside class="panel"><div class="panel-head"><h2>Riders</h2></div><div id="riders"></div></aside></main>
+</div>
+<div class="modal" id="modal"><div class="modal-card"><button class="close" onclick="closeModal()">×</button><h2>Log delivery</h2><form id="form"><input name="customer_name" placeholder="Customer name" required><input name="customer_phone" placeholder="Customer phone e.g. 0712345678" required><input name="delivery_address" placeholder="Delivery address" required><input name="item_description" placeholder="Item / order description" required><input name="retailer_name" placeholder="Retailer name" value="Demo Retailer" required><button class="primary" type="submit">Create delivery</button></form></div></div>
+<script src="/app.js"></script></body></html>
