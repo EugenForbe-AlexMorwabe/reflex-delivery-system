@@ -50,7 +50,9 @@ async function load() {
       cache: 'no-store'
     });
 
+
     const data = await response.json();
+
 
     if (!response.ok) {
 
@@ -62,17 +64,24 @@ async function load() {
 
     }
 
+
     console.log('Dashboard loaded:', data);
 
-    renderStats(data.counts || {});
+
+    renderStats(
+      data.counts || {}
+    );
+
 
     renderDeliveries(
       data.deliveries || []
     );
 
+
     renderRiders(
       data.riders || []
     );
+
 
   } catch (error) {
 
@@ -80,6 +89,7 @@ async function load() {
       'Dashboard loading error:',
       error
     );
+
 
     renderDashboardError(
       error.message
@@ -99,13 +109,17 @@ function renderDashboardError(message) {
   const queue =
     document.getElementById('queue');
 
+
   const riders =
     document.getElementById('riders');
+
 
   if (queue) {
 
     queue.innerHTML = `
+
       <div class="empty-state">
+
         <strong>
           Unable to load deliveries
         </strong>
@@ -113,15 +127,20 @@ function renderDashboardError(message) {
         <span>
           ${escapeHtml(message)}
         </span>
+
       </div>
+
     `;
 
   }
 
+
   if (riders) {
 
     riders.innerHTML = `
+
       <div class="empty-state">
+
         <strong>
           Unable to load riders
         </strong>
@@ -129,7 +148,9 @@ function renderDashboardError(message) {
         <span>
           ${escapeHtml(message)}
         </span>
+
       </div>
+
     `;
 
   }
@@ -146,6 +167,7 @@ function renderStats(counts) {
   const stats =
     document.getElementById('stats');
 
+
   if (!stats) {
 
     console.error(
@@ -156,11 +178,13 @@ function renderStats(counts) {
 
   }
 
+
   const pending =
     getStatusCount(
       counts,
       'Pending'
     );
+
 
   const assigned =
     getStatusCount(
@@ -168,17 +192,20 @@ function renderStats(counts) {
       'Assigned'
     );
 
+
   const pickedUp =
     getStatusCount(
       counts,
       'Picked Up'
     );
 
+
   const delivered =
     getStatusCount(
       counts,
       'Delivered'
     );
+
 
   stats.innerHTML = `
 
@@ -229,6 +256,7 @@ function getStatusCount(
 
   }
 
+
   const matchingKey =
     Object.keys(counts).find(
       function (key) {
@@ -245,11 +273,13 @@ function getStatusCount(
       }
     );
 
+
   if (!matchingKey) {
 
     return 0;
 
   }
+
 
   return Number(
     counts[matchingKey]
@@ -269,6 +299,7 @@ function statCard(
 ) {
 
   return `
+
     <div class="stat">
 
       <b>
@@ -284,6 +315,7 @@ function statCard(
       </small>
 
     </div>
+
   `;
 
 }
@@ -300,6 +332,7 @@ function renderDeliveries(
   const container =
     document.getElementById('queue');
 
+
   if (!container) {
 
     console.error(
@@ -310,12 +343,14 @@ function renderDeliveries(
 
   }
 
+
   if (
     !Array.isArray(deliveries) ||
     deliveries.length === 0
   ) {
 
     container.innerHTML = `
+
       <div class="empty-state">
 
         <strong>
@@ -328,11 +363,13 @@ function renderDeliveries(
         </span>
 
       </div>
+
     `;
 
     return;
 
   }
+
 
   container.innerHTML =
     deliveries
@@ -356,17 +393,21 @@ function renderDelivery(
     delivery.delivery_code ||
     'Delivery';
 
+
   const customer =
     delivery.customer_name ||
     'Unknown customer';
+
 
   const address =
     delivery.delivery_address ||
     'No address';
 
+
   const item =
     delivery.item_description ||
     'Item not specified';
+
 
   const status =
     normalizeStatus(
@@ -374,15 +415,18 @@ function renderDelivery(
       'Pending'
     );
 
+
   const rider =
     delivery.rider &&
     delivery.rider.name
       ? delivery.rider.name
       : 'Unassigned';
 
+
   const phone =
     delivery.customer_phone ||
     '';
+
 
   let actions = '';
 
@@ -394,6 +438,7 @@ function renderDelivery(
   if (status === 'Pending') {
 
     actions = `
+
       <div class="actions">
 
         <button
@@ -406,6 +451,7 @@ function renderDelivery(
         </button>
 
       </div>
+
     `;
 
   }
@@ -418,6 +464,7 @@ function renderDelivery(
   else if (status === 'Assigned') {
 
     actions = `
+
       <div class="actions">
 
         <button
@@ -431,6 +478,7 @@ function renderDelivery(
         </button>
 
       </div>
+
     `;
 
   }
@@ -443,6 +491,7 @@ function renderDelivery(
   else if (status === 'Picked Up') {
 
     actions = `
+
       <div class="actions">
 
         <button
@@ -466,6 +515,7 @@ function renderDelivery(
         </button>
 
       </div>
+
     `;
 
   }
@@ -488,6 +538,7 @@ function renderDelivery(
           </div>
 
         </div>
+
 
         <span class="pill">
           ${escapeHtml(status)}
@@ -516,6 +567,7 @@ function renderDelivery(
       ${
         phone
           ? `
+
             <div
               class="muted"
               style="margin-top:5px"
@@ -523,6 +575,7 @@ function renderDelivery(
               Phone:
               ${escapeHtml(phone)}
             </div>
+
           `
           : ''
       }
@@ -533,9 +586,11 @@ function renderDelivery(
         style="margin-top:5px"
       >
         Rider:
+
         <strong>
           ${escapeHtml(rider)}
         </strong>
+
       </div>
 
 
@@ -561,24 +616,30 @@ function normalizeStatus(
       .trim()
       .toLowerCase();
 
+
   switch (value) {
 
     case 'pending':
       return 'Pending';
 
+
     case 'assigned':
       return 'Assigned';
+
 
     case 'picked up':
     case 'picked_up':
     case 'pickedup':
       return 'Picked Up';
 
+
     case 'delivered':
       return 'Delivered';
 
+
     case 'failed':
       return 'Failed';
+
 
     default:
       return status || 'Pending';
@@ -599,6 +660,7 @@ function renderRiders(
   const container =
     document.getElementById('riders');
 
+
   if (!container) {
 
     console.error(
@@ -609,12 +671,14 @@ function renderRiders(
 
   }
 
+
   if (
     !Array.isArray(riders) ||
     riders.length === 0
   ) {
 
     container.innerHTML = `
+
       <div class="empty-state">
 
         <strong>
@@ -627,11 +691,13 @@ function renderRiders(
         </span>
 
       </div>
+
     `;
 
     return;
 
   }
+
 
   container.innerHTML =
     riders
@@ -653,27 +719,50 @@ function renderRider(
     rider.name ||
     'Unnamed Rider';
 
+
   const phone =
     rider.phone ||
     'No phone';
+
 
   const vehicle =
     rider.vehicle ||
     'Motorcycle';
 
+
+  /*
+  IMPORTANT:
+
+  Supabase riders table uses:
+
+      status = available
+      status = busy
+
+  NOT:
+
+      is_available
+  */
+
   const available =
-    rider.is_available === true ||
-    rider.is_available === 'true';
+    String(
+      rider.status || ''
+    )
+      .trim()
+      .toLowerCase() ===
+    'available';
+
 
   const status =
     available
       ? 'Available'
       : 'Busy';
 
+
   const statusClass =
     available
       ? 'available'
       : 'busy';
+
 
   return `
 
@@ -695,6 +784,7 @@ function renderRider(
           <strong>
             ${escapeHtml(name)}
           </strong>
+
 
           <span
             class="rider-status ${statusClass}"
@@ -739,6 +829,7 @@ function setupDeliveryForm() {
   const form =
     document.getElementById('form');
 
+
   if (!form) {
 
     console.warn(
@@ -749,28 +840,34 @@ function setupDeliveryForm() {
 
   }
 
+
   form.addEventListener(
     'submit',
     async function (event) {
 
       event.preventDefault();
 
+
       const submitButton =
         form.querySelector(
           'button[type="submit"]'
         );
 
+
       if (submitButton) {
 
-        submitButton.disabled = true;
+        submitButton.disabled =
+          true;
 
         submitButton.textContent =
           'Creating...';
 
       }
 
+
       const formData =
         new FormData(form);
+
 
       const payload = {
 
@@ -779,20 +876,24 @@ function setupDeliveryForm() {
             'customer_name'
           ),
 
+
         customer_phone:
           formData.get(
             'customer_phone'
           ),
+
 
         delivery_address:
           formData.get(
             'delivery_address'
           ),
 
+
         item_description:
           formData.get(
             'item_description'
           ),
+
 
         retailer_name:
           formData.get(
@@ -813,11 +914,13 @@ function setupDeliveryForm() {
               method: 'POST',
 
               headers: {
+
                 'Content-Type':
                   'application/json',
 
                 'Accept':
                   'application/json'
+
               },
 
               body:
@@ -858,6 +961,7 @@ function setupDeliveryForm() {
             '[name="retailer_name"]'
           );
 
+
         if (retailerInput) {
 
           retailerInput.value =
@@ -867,6 +971,7 @@ function setupDeliveryForm() {
 
 
         closeModal();
+
 
         await load();
 
@@ -878,10 +983,12 @@ function setupDeliveryForm() {
           error
         );
 
+
         alert(
           'CREATE DELIVERY ERROR\n\n' +
           error.message
         );
+
 
       } finally {
 
@@ -912,8 +1019,11 @@ function setupModal() {
   const modal =
     document.getElementById('modal');
 
+
   if (!modal) {
+
     return;
+
   }
 
 
@@ -940,11 +1050,16 @@ function openModal() {
   const modal =
     document.getElementById('modal');
 
+
   if (!modal) {
+
     return;
+
   }
 
-  modal.style.display = 'flex';
+
+  modal.style.display =
+    'flex';
 
 }
 
@@ -954,11 +1069,16 @@ function closeModal() {
   const modal =
     document.getElementById('modal');
 
+
   if (!modal) {
+
     return;
+
   }
 
-  modal.style.display = 'none';
+
+  modal.style.display =
+    'none';
 
 }
 
@@ -974,6 +1094,7 @@ function setupRefreshButton() {
       'button'
     );
 
+
   buttons.forEach(
     function (button) {
 
@@ -982,19 +1103,24 @@ function setupRefreshButton() {
           .trim()
           .toLowerCase();
 
+
       if (text === 'refresh') {
 
         button.addEventListener(
           'click',
           async function () {
 
-            button.disabled = true;
+            button.disabled =
+              true;
+
 
             const originalText =
               button.textContent;
 
+
             button.textContent =
               'Refreshing...';
+
 
             try {
 
@@ -1027,13 +1153,6 @@ function setupRefreshButton() {
 
 function setupAssignModal() {
 
-  /*
-    Create the assignment modal dynamically.
-
-    This means you do NOT need to edit
-    index.html for rider assignment.
-  */
-
   if (
     document.getElementById(
       'assign-modal'
@@ -1048,11 +1167,14 @@ function setupAssignModal() {
   const modal =
     document.createElement('div');
 
+
   modal.id =
     'assign-modal';
 
+
   modal.className =
     'modal';
+
 
   modal.style.display =
     'none';
@@ -1182,6 +1304,7 @@ function setupAssignModal() {
       'close-assign-modal'
     );
 
+
   if (closeButton) {
 
     closeButton.addEventListener(
@@ -1213,6 +1336,7 @@ function setupAssignModal() {
       'confirm-assign-btn'
     );
 
+
   if (confirmButton) {
 
     confirmButton.addEventListener(
@@ -1236,6 +1360,7 @@ async function showAssignRider(
   selectedDeliveryId =
     deliveryId;
 
+
   selectedRiderId =
     null;
 
@@ -1248,20 +1373,24 @@ async function showAssignRider(
       'assign-modal'
     );
 
+
   const ridersContainer =
     document.getElementById(
       'assign-riders'
     );
+
 
   const summary =
     document.getElementById(
       'assign-delivery-summary'
     );
 
+
   const errorBox =
     document.getElementById(
       'assign-error'
     );
+
 
   const confirmButton =
     document.getElementById(
@@ -1333,6 +1462,7 @@ async function showAssignRider(
       await fetch(
         '/api/dashboard',
         {
+
           method: 'GET',
 
           headers: {
@@ -1341,6 +1471,7 @@ async function showAssignRider(
           },
 
           cache: 'no-store'
+
         }
       );
 
@@ -1365,8 +1496,10 @@ async function showAssignRider(
         .find(
           function (item) {
 
-            return String(item.id) ===
-              String(deliveryId);
+            return (
+              String(item.id) ===
+              String(deliveryId)
+            );
 
           }
         );
@@ -1391,6 +1524,7 @@ async function showAssignRider(
             )}
           </strong>
 
+
           <span
             style="
               display:block;
@@ -1410,6 +1544,7 @@ async function showAssignRider(
               delivery.delivery_address ||
               'No address'
             )}
+
           </span>
 
         `;
@@ -1417,6 +1552,7 @@ async function showAssignRider(
       } else {
 
         summary.innerHTML = `
+
           <span
             style="
               color:#64748b;
@@ -1425,6 +1561,7 @@ async function showAssignRider(
           >
             Select an available rider.
           </span>
+
         `;
 
       }
@@ -1432,18 +1569,38 @@ async function showAssignRider(
     }
 
 
+    /*
+    ==================================================
+    IMPORTANT RIDER FILTER
+
+    Your Supabase riders table uses:
+
+        status = available
+
+    Therefore we filter by rider.status.
+    ==================================================
+    */
+
     const availableRiders =
       (data.riders || [])
         .filter(
           function (rider) {
 
-            return (
-              rider.is_available === true ||
-              rider.is_available === 'true'
-            );
+            return String(
+              rider.status || ''
+            )
+              .trim()
+              .toLowerCase() ===
+              'available';
 
           }
         );
+
+
+    console.log(
+      'Available riders:',
+      availableRiders
+    );
 
 
     renderAssignRiders(
@@ -1501,7 +1658,9 @@ function renderAssignRiders(
 
 
   if (!container) {
+
     return;
+
   }
 
 
@@ -1540,9 +1699,11 @@ function renderAssignRiders(
             rider.name ||
             'Unnamed Rider';
 
+
           const phone =
             rider.phone ||
             'No phone';
+
 
           const vehicle =
             rider.vehicle ||
@@ -1624,8 +1785,11 @@ function renderAssignRiders(
                   "
                 >
                   ${escapeHtml(vehicle)}
+
                   ·
+
                   ${escapeHtml(phone)}
+
                 </span>
 
               </span>
@@ -1685,6 +1849,7 @@ function selectRider(
       button.style.borderColor =
         '#e5e7eb';
 
+
       button.style.background =
         '#fff';
 
@@ -1700,8 +1865,10 @@ function selectRider(
         check.style.background =
           '#fff';
 
+
         check.style.borderColor =
           '#cbd5e1';
+
 
         check.style.color =
           'transparent';
@@ -1716,6 +1883,7 @@ function selectRider(
 
     element.style.borderColor =
       '#2563eb';
+
 
     element.style.background =
       '#eff6ff';
@@ -1732,8 +1900,10 @@ function selectRider(
       check.style.background =
         '#2563eb';
 
+
       check.style.borderColor =
         '#2563eb';
+
 
       check.style.color =
         '#fff';
@@ -1782,6 +1952,7 @@ function closeAssignModal() {
   selectedRiderId =
     null;
 
+
   selectedDeliveryId =
     null;
 
@@ -1808,6 +1979,7 @@ async function confirmAssignRider() {
     document.getElementById(
       'confirm-assign-btn'
     );
+
 
   const errorBox =
     document.getElementById(
@@ -1945,7 +2117,9 @@ async function updateStatus(
 
 
   if (!confirmed) {
+
     return;
+
   }
 
 
@@ -2036,14 +2210,18 @@ function getInitials(
       .filter(Boolean);
 
 
-  if (parts.length === 0) {
+  if (
+    parts.length === 0
+  ) {
 
     return 'R';
 
   }
 
 
-  if (parts.length === 1) {
+  if (
+    parts.length === 1
+  ) {
 
     return parts[0]
       .substring(0, 2)
@@ -2152,8 +2330,7 @@ document.addEventListener(
 
 
 /* ==================================================
-   EXPOSE FUNCTIONS
-   Needed because buttons use onclick=""
+   GLOBAL FUNCTIONS
 ================================================== */
 
 window.load =
