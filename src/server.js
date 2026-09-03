@@ -9,7 +9,136 @@ import { z } from 'zod';
 import { supabase } from './db.js';
 import { sendSms } from './sms.js';
 
+/* =========================================================
+   PRIVACY POLICY
+========================================================= */
 
+app.get('/privacy', (req, res) => {
+  res.type('html').send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+      <title>Reflex Delivery - Privacy Policy</title>
+
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          max-width: 850px;
+          margin: 0 auto;
+          padding: 40px 20px;
+          line-height: 1.7;
+          color: #172033;
+          background: #f7f9fc;
+        }
+
+        .container {
+          background: white;
+          padding: 40px;
+          border-radius: 16px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+        }
+
+        h1 {
+          margin-top: 0;
+        }
+
+        h2 {
+          margin-top: 32px;
+        }
+
+        .updated {
+          color: #667085;
+          font-size: 14px;
+        }
+      </style>
+    </head>
+
+    <body>
+
+      <div class="container">
+
+        <h1>Reflex Delivery Privacy Policy</h1>
+
+        <p class="updated">
+          Last updated: September 2026
+        </p>
+
+        <p>
+          Reflex Delivery is a delivery management platform that helps
+          businesses manage delivery requests, customers, riders and
+          delivery communications.
+        </p>
+
+        <h2>Information We Collect</h2>
+
+        <p>
+          We may collect information required to provide delivery
+          services, including customer names, phone numbers, delivery
+          addresses, delivery details and rider information.
+        </p>
+
+        <h2>How We Use Information</h2>
+
+        <p>
+          Information is used to create and manage deliveries, assign
+          riders, communicate delivery information and provide the
+          delivery management service.
+        </p>
+
+        <h2>WhatsApp Communications</h2>
+
+        <p>
+          Reflex Delivery may use the WhatsApp Business Platform to
+          receive and send messages relating to delivery requests and
+          delivery operations.
+        </p>
+
+        <h2>Information Sharing</h2>
+
+        <p>
+          Information may be shared with authorized delivery personnel
+          when necessary to complete a delivery.
+        </p>
+
+        <h2>Data Security</h2>
+
+        <p>
+          We take reasonable measures to protect information handled
+          through the Reflex Delivery platform.
+        </p>
+
+        <h2>Data Retention</h2>
+
+        <p>
+          Information is retained only for as long as reasonably
+          necessary to operate the service and maintain delivery
+          records.
+        </p>
+
+        <h2>Your Rights</h2>
+
+        <p>
+          If you have questions about information handled by Reflex
+          Delivery or would like to request deletion of information,
+          please contact the Reflex Delivery service administrator.
+        </p>
+
+        <h2>Contact</h2>
+
+        <p>
+          For privacy-related questions, please contact the Reflex
+          Delivery service administrator.
+        </p>
+
+      </div>
+
+    </body>
+    </html>
+  `);
+});
 /* =========================================================
    PATHS
 ========================================================= */
