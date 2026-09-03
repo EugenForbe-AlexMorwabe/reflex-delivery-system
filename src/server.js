@@ -1,5 +1,4 @@
-Reflex Delivery — Corrected server.js
-Copy the code below into src/server.js. This document contains the corrected server file prepared from the current version.
+
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
