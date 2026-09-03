@@ -1168,7 +1168,72 @@ app.post(
   }
 );
 
+/* =========================================================
+   WHATSAPP SEND MESSAGE
+========================================================= */
 
+async function sendWhatsAppMessage(to, message) {
+  const phoneNumberId =
+    process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  const accessToken =
+    process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId) {
+    throw new Error(
+      'WHATSAPP_PHONE_NUMBER_ID is missing'
+    );
+  }
+
+  if (!accessToken) {
+    throw new Error(
+      'WHATSAPP_ACCESS_TOKEN is missing'
+    );
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+
+        recipient_type: 'individual',
+
+        to: to,
+
+        type: 'text',
+
+        text: {
+          preview_url: false,
+          body: message
+        }
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  console.log(
+    'WhatsApp send response:',
+    JSON.stringify(result, null, 2)
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message ||
+      'WhatsApp message failed'
+    );
+  }
+
+  return result;
+}
 /* =========================================================
    WHATSAPP WEBHOOK VERIFICATION
 ========================================================= */
