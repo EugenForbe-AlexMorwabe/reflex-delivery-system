@@ -1214,56 +1214,52 @@ app.get(
 
 
 /* =========================================================
-   WHATSAPP INBOUND WEBHOOK
+   WHATSAPP INBOUND WEBHOOK - DIAGNOSTIC
 ========================================================= */
 
 app.post(
   '/api/whatsapp/webhook',
   async (req, res) => {
 
-    try {
+    console.log('');
+    console.log('========================================');
+    console.log('WHATSAPP WEBHOOK HIT');
+    console.log('========================================');
 
-      console.log(
-        'WhatsApp webhook received'
-      );
+    console.log(
+      'METHOD:',
+      req.method
+    );
 
+    console.log(
+      'CONTENT-TYPE:',
+      req.headers['content-type']
+    );
 
-      console.log(
-        JSON.stringify(
-          req.body,
-          null,
-          2
-        )
-      );
+    console.log(
+      'USER-AGENT:',
+      req.headers['user-agent']
+    );
 
+    console.log(
+      'BODY:',
+      JSON.stringify(
+        req.body,
+        null,
+        2
+      )
+    );
 
-      /*
-       * We acknowledge the webhook.
-       *
-       * Actual WhatsApp message parsing will
-       * be connected to delivery creation next.
-       */
+    console.log('========================================');
+    console.log('');
 
-      return res
-        .sendStatus(200);
+    /*
+     * Always acknowledge Meta.
+     */
 
-
-    } catch (error) {
-
-      console.error(
-        'WHATSAPP WEBHOOK ERROR:',
-        error
-      );
-
-
-      /*
-       * Meta expects acknowledgement.
-       */
-
-      return res
-        .sendStatus(200);
-
-    }
+    return res
+      .status(200)
+      .send('EVENT_RECEIVED');
 
   }
 );
