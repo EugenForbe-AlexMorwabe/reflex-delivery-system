@@ -9,6 +9,21 @@ import { z } from 'zod';
 import { supabase } from './db.js';
 import { sendSms } from './sms.js';
 
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+
+const port = process.env.PORT || 3000;
+
+/* =========================================================
+   MIDDLEWARE
+========================================================= */
+
+app.use(cors());
+app.use(express.json());
+
+
 /* =========================================================
    PRIVACY POLICY
 ========================================================= */
@@ -19,7 +34,10 @@ app.get('/privacy', (req, res) => {
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+      >
 
       <title>Reflex Delivery - Privacy Policy</title>
 
@@ -57,7 +75,6 @@ app.get('/privacy', (req, res) => {
     </head>
 
     <body>
-
       <div class="container">
 
         <h1>Reflex Delivery Privacy Policy</h1>
@@ -67,47 +84,47 @@ app.get('/privacy', (req, res) => {
         </p>
 
         <p>
-          Reflex Delivery is a delivery management platform that helps
-          businesses manage delivery requests, customers, riders and
-          delivery communications.
+          Reflex Delivery is a delivery management platform that
+          helps businesses manage delivery requests, customers,
+          riders and delivery communications.
         </p>
 
         <h2>Information We Collect</h2>
 
         <p>
           We may collect information required to provide delivery
-          services, including customer names, phone numbers, delivery
-          addresses, delivery details and rider information.
+          services, including customer names, phone numbers,
+          delivery addresses, delivery details and rider information.
         </p>
 
         <h2>How We Use Information</h2>
 
         <p>
-          Information is used to create and manage deliveries, assign
-          riders, communicate delivery information and provide the
-          delivery management service.
+          Information is used to create and manage deliveries,
+          assign riders, communicate delivery information and
+          provide the delivery management service.
         </p>
 
         <h2>WhatsApp Communications</h2>
 
         <p>
-          Reflex Delivery may use the WhatsApp Business Platform to
-          receive and send messages relating to delivery requests and
-          delivery operations.
+          Reflex Delivery may use the WhatsApp Business Platform
+          to receive and send messages relating to delivery
+          requests and delivery operations.
         </p>
 
         <h2>Information Sharing</h2>
 
         <p>
-          Information may be shared with authorized delivery personnel
-          when necessary to complete a delivery.
+          Information may be shared with authorized delivery
+          personnel when necessary to complete a delivery.
         </p>
 
         <h2>Data Security</h2>
 
         <p>
-          We take reasonable measures to protect information handled
-          through the Reflex Delivery platform.
+          We take reasonable measures to protect information
+          handled through the Reflex Delivery platform.
         </p>
 
         <h2>Data Retention</h2>
@@ -121,20 +138,20 @@ app.get('/privacy', (req, res) => {
         <h2>Your Rights</h2>
 
         <p>
-          If you have questions about information handled by Reflex
-          Delivery or would like to request deletion of information,
-          please contact the Reflex Delivery service administrator.
+          If you have questions about information handled by
+          Reflex Delivery or would like to request deletion of
+          information, please contact the Reflex Delivery
+          service administrator.
         </p>
 
         <h2>Contact</h2>
 
         <p>
-          For privacy-related questions, please contact the Reflex
-          Delivery service administrator.
+          For privacy-related questions, please contact the
+          Reflex Delivery service administrator.
         </p>
 
       </div>
-
     </body>
     </html>
   `);
