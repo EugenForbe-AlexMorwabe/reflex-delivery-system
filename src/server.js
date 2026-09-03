@@ -1279,7 +1279,7 @@ app.get(
 
 
 /* =========================================================
-   WHATSAPP INBOUND WEBHOOK - DIAGNOSTIC
+   WHATSAPP INBOUND WEBHOOK
 ========================================================= */
 
 app.post(
@@ -1291,65 +1291,138 @@ app.post(
     console.log('WHATSAPP WEBHOOK HIT');
     console.log('========================================');
 
-    console.log(
-      'METHOD:',
-      req.method
-    );
+    try {
 
-    console.log(
-      'CONTENT-TYPE:',
-      req.headers['content-type']
-    );
+      const body = req.body;
 
-    console.log(
-      'USER-AGENT:',
-      req.headers['user-agent']
-    );
+      console.log(
+        'Incoming WhatsApp payload:',
+        JSON.stringify(
+          body,
+          null,
+          2
+        )
+      );
 
-    console.log(
-      'BODY:',
-      JSON.stringify(
-        req.body,
-        null,
-        2
-      )
-    );
+      const entries =
+        body?.entry || [];
 
-    console.log('========================================');
-    console.log('');
+      for (const entry of entries) {
 
-    /*
-     * Always acknowledge Meta.
-     */
+        const changes =
+          entry?.changes || [];
 
-    return res
-      .status(200)
-      .send('EVENT_RECEIVED');
+        for (const change of changes) {
 
+          const value =
+            change?.value;
+
+          const messages =
+            value?.messages || [];
+
+          for (const message of messages) {
+
+            /*
+             * We only handle text messages
+             * for this first test.
+             */
+
+            if (
+              message?.type !== 'text'
+            ) {
+              console.log(
+                'Ignoring non-text WhatsApp message:',
+                message?.type
+              );
+
+              continue;
+            }
+
+            const from =
+              message?.from;
+
+            const text =
+              message?.text?.body?.trim();
+
+            console.log(
+              'WhatsApp sender:',
+              from
+            );
+
+            console.log(
+              'WhatsApp message:',
+              text
+            );
+
+            if (
+              !from ||
+              !text
+            ) {
+              console.log(
+                'Missing sender or message text'
+              );
+
+              continue;
+            }
+
+            /*
+             * FIRST REFLEX RESPONSE
+             */
+
+            const reply =
+              `👋 Welcome to Reflex Delivery!\n\n` +
+              `Let's create a delivery.\n\n` +
+              `Please enter the customer's name.`;
+
+            try {
+
+              await sendWhatsAppMessage(
+                from,
+                reply
+              );
+
+              console.log(
+                'WhatsApp reply sent successfully to:',
+                from
+              );
+
+            } catch (smsError) {
+
+              console.error(
+                'WhatsApp send error:',
+                smsError.message
+              );
+
+            }
+          }
+        }
+      }
+
+      console.log(
+        '========================================'
+      );
+
+      return res
+        .status(200)
+        .send('EVENT_RECEIVED');
+
+    } catch (error) {
+
+      console.error(
+        'WHATSAPP WEBHOOK ERROR:',
+        error
+      );
+
+      /*
+       * Still acknowledge Meta.
+       */
+
+      return res
+        .status(200)
+        .send('EVENT_RECEIVED');
+    }
   }
 );
-
-
-/* =========================================================
-   API 404
-========================================================= */
-
-app.use(
-  '/api',
-  (_req, res) => {
-
-    return res
-      .status(404)
-      .json({
-
-        error:
-          'API endpoint not found'
-
-      });
-
-  }
-);
-
 
 /* =========================================================
    FRONTEND FALLBACK
