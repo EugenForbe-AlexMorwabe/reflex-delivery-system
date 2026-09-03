@@ -1,3 +1,5 @@
+Reflex Delivery — Corrected server.js
+Copy the code below into src/server.js. This document contains the corrected server file prepared from the current version.
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -9,12 +11,36 @@ import { z } from 'zod';
 import { supabase } from './db.js';
 import { sendSms } from './sms.js';
 
-const express = require('express');
-const cors = require('cors');
+
+
+/* =========================================================
+   PATHS
+========================================================= */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
+/* =========================================================
+   EXPRESS
+========================================================= */
 
 const app = express();
 
-const port = process.env.PORT || 3000;
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
+
+app.use(express.json());
+app.use(morgan('tiny'));
+
+app.use(
+  express.static(
+    path.join(__dirname, '..', 'public')
+  )
+);
 
 
 /* =========================================================
@@ -149,34 +175,6 @@ app.get('/privacy', (req, res) => {
     </html>
   `);
 });
-/* =========================================================
-   PATHS
-========================================================= */
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-
-/* =========================================================
-   EXPRESS
-========================================================= */
-
-const app = express();
-
-app.use(
-  helmet({
-    contentSecurityPolicy: false
-  })
-);
-
-app.use(express.json());
-app.use(morgan('tiny'));
-
-app.use(
-  express.static(
-    path.join(__dirname, '..', 'public')
-  )
-);
 
 
 /* =========================================================
