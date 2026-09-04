@@ -1,15 +1,7 @@
-/*Reflex Delivery System — Corrected Dashboard app.js
-Corrected deployable version of the actual dashboard public/app.js. This version sends the lowercase status values expected by the server API and matches the WhatsApp manual-override workflow.
-Dashboard workflow
-•	Pending → Assign rider
-•	Failed → Assign rider
-•	Assigned → 📦 Mark picked up / ❌ Mark not picked
-•	Picked Up → ✅ Mark delivered / ❌ Mark not delivered
-•	Delivered → no action
-API status values
-The dashboard sends picked_up, delivered, and failed to the server. Failure actions also send the notes Not picked and Not delivered.
-Complete app.js*/
-
+/*REFLEX DELIVERY SYSTEM — Fixed Dashboard Frontend
+public/app.js
+Complete deployment code • September 2026
+Complete Code8*/
 'use strict';
 
 console.log('🔥 REFLEX APP.JS LOADED - NEW VERSION 🔥');
@@ -45,7 +37,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
   loadDashboard();
 
+  startDashboardAutoRefresh();
+
 });
+
+
+/* ======================================================
+   LIVE DASHBOARD REFRESH
+====================================================== */
+
+function startDashboardAutoRefresh() {
+
+  if (window.reflexDashboardRefreshTimer) {
+    clearInterval(window.reflexDashboardRefreshTimer);
+  }
+
+  window.reflexDashboardRefreshTimer = setInterval(
+    function () {
+      if (document.hidden) {
+        return;
+      }
+      loadDashboard();
+    },
+    5000
+  );
+}
 
 
 /* ======================================================
@@ -189,6 +205,17 @@ function renderStats(counts) {
       counts,
       'Pending'
     );
+
+
+  const failed =
+    getStatusCount(
+      counts,
+      'Failed'
+    );
+
+
+  const pendingFailed =
+    pending + failed;
 
 
   const assigned =
@@ -2568,6 +2595,9 @@ document.addEventListener(
 
 window.loadDashboard =
   loadDashboard;
+
+window.startDashboardAutoRefresh =
+  startDashboardAutoRefresh;
 
 
 /*
