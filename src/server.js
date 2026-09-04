@@ -1,6 +1,13 @@
-/*Reflex Delivery System — Rider Buttons Phone Matching Fix
-Fixes the rider button error caused by phone-number formatting differences (for example 0712345678 vs 254712345678 vs +254 712 345 678). The rider button handler now normalizes both the incoming WhatsApp number and the phone numbers stored in the riders table before matching.
-*/
+/*Reflex Delivery System — Final Rider WhatsApp Button Workflow
+Final server.js source with the rider workflow using four distinct actions: Mark Picked Up, Mark Not Picked, Mark Delivered, and Mark Not Delivered.
+Validation: node --check passed.
+Rider workflow
+•	ASSIGNED → 📦 Mark Picked Up | ❌ Mark Not Picked
+•	PICKED_UP → ✅ Mark Delivered | ❌ Mark Not Delivered
+•	Mark Not Picked: assigned → failed
+•	Mark Not Delivered: picked_up → failed
+•	Both failure actions record a failed event and release the rider as available.
+Source code*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1017,7 +1024,8 @@ app.post(
             `📌 Status: *ASSIGNED*\n\n` +
             `Please collect the delivery, then tap the button below.`,
             [
-              { id: `PICKED_UP:${delivery.id}`, title: '📦 Mark Picked Up' }
+              { id: `PICKED_UP:${delivery.id}`, title: '📦 Mark Picked Up' },
+              { id: `NOT_PICKED:${delivery.id}`, title: '❌ Mark Not Picked' }
             ]
           );
 
@@ -1608,7 +1616,7 @@ async function handleRiderButtonAction(from, buttonId) {
   const action = buttonId.slice(0, separatorIndex);
   const deliveryId = buttonId.slice(separatorIndex + 1);
 
-  if (!['PICKED_UP', 'DELIVERED'].includes(action)) {
+  if (!['PICKED_UP', 'DELIVERED', 'NOT_PICKED', 'NOT_DELIVERED'].includes(action)) {
     return false;
   }
 
@@ -1729,8 +1737,78 @@ async function handleRiderButtonAction(from, buttonId) {
       `📌 Status: *PICKED UP*\n\n` +
       `When you have completed the delivery, tap the button below.`,
       [
-        { id: `DELIVERED:${delivery.id}`, title: '✅ Mark Delivered' }
+        { id: `DELIVERED:${delivery.id}`, title: '✅ Mark Delivered' },
+        { id: `NOT_DELIVERED:${delivery.id}`, title: '❌ Mark Not Delivered' }
       ]
+    );
+
+    return true;
+  }
+
+  if (action === 'NOT_PICKED' || action === 'NOT_DELIVERED') {
+    const expectedStatus = action === 'NOT_PICKED' ? STATUS.ASSIGNED : STATUS.PICKED_UP;
+    const failureStatusLabel = action === 'NOT_PICKED' ? 'NOT PICKED' : 'NOT DELIVERED';
+    const failureNote = action === 'NOT_PICKED'
+      ? `Not picked by ${rider.name}`
+      : `Not delivered by ${rider.name}`;
+
+    if (delivery.status !== expectedStatus) {
+      await sendWhatsAppMessage(
+        from,
+        `⚠️ Delivery *${delivery.delivery_code}* cannot be marked ${failureStatusLabel.toLowerCase()} because its current status is *${String(delivery.status).toUpperCase()}*.`
+      );
+      return true;
+    }
+
+    const previousStatus = delivery.status;
+    const { error: updateError } = await supabase
+      .from('deliveries')
+      .update({ status: STATUS.FAILED })
+      .eq('id', delivery.id)
+      .eq('rider_id', rider.id);
+
+    if (updateError) {
+      console.error('RIDER FAILURE UPDATE ERROR:', updateError);
+      await sendWhatsAppMessage(from, '⚠️ I could not update this delivery. Please try again.');
+      return true;
+    }
+
+    const eventResult = await recordEvent(
+      delivery.id,
+      STATUS.FAILED,
+      'whatsapp',
+      failureNote
+    );
+
+    if (eventResult.error) {
+      console.error('RIDER FAILURE EVENT FAILED:', eventResult.error);
+      await supabase
+        .from('deliveries')
+        .update({ status: previousStatus })
+        .eq('id', delivery.id);
+
+      await sendWhatsAppMessage(from, '⚠️ The failure could not be recorded completely. Please try again.');
+      return true;
+    }
+
+    const { error: riderUpdateError } = await supabase
+      .from('riders')
+      .update({ status: 'available' })
+      .eq('id', rider.id);
+
+    if (riderUpdateError) {
+      console.error('RIDER AVAILABLE UPDATE ERROR:', riderUpdateError);
+    }
+
+    console.log(`RIDER ${failureStatusLabel} EVENT RECORDED:`, delivery.id);
+
+    await sendWhatsAppMessage(
+      from,
+      `❌ *Delivery ${failureStatusLabel}*\n\n` +
+      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
+      `👤 Customer: ${delivery.customer_name}\n` +
+      `📌 Status: *FAILED*\n\n` +
+      `The delivery has been marked as failed. You are now *AVAILABLE* for the next delivery. 🛵`
     );
 
     return true;
