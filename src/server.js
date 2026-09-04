@@ -1,4 +1,7 @@
-import 'dotenv/config';
+/*Reflex Delivery — Updated server.js
+This version keeps the working rider WhatsApp notification and strengthens delivery event recording. Event inserts now return the inserted row, log the full Supabase error, and assignment is rolled back if the ASSIGNED event cannot be recorded.
+*/
+   import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
