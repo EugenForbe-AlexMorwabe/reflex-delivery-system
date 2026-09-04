@@ -1,13 +1,13 @@
-/*Reflex Delivery System — Final Rider WhatsApp Button Workflow
-Final server.js source with the rider workflow using four distinct actions: Mark Picked Up, Mark Not Picked, Mark Delivered, and Mark Not Delivered.
-Validation: node --check passed.
-Rider workflow
-•	ASSIGNED → 📦 Mark Picked Up | ❌ Mark Not Picked
-•	PICKED_UP → ✅ Mark Delivered | ❌ Mark Not Delivered
-•	Mark Not Picked: assigned → failed
-•	Mark Not Delivered: picked_up → failed
-•	Both failure actions record a failed event and release the rider as available.
-Source code*/
+Reflex — Server: WhatsApp + Dashboard Status Sync
+Final source file for the Reflex Delivery System.
+Changes
+•	WhatsApp and dashboard manual status changes now use the same shared delivery-status transition logic.
+•	Delivered and failed transitions release the assigned rider to status=available.
+•	Rider release is verified and errors are surfaced instead of silently ignored.
+•	Event recording and rollback remain protected.
+•	The four WhatsApp rider actions remain: Mark Picked Up, Mark Not Picked, Mark Delivered, Mark Not Delivered.
+•	No nonexistent database fields were introduced.
+Source code
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1132,255 +1132,57 @@ app.post(
 
 
 /* =========================================================
+   SHARED DELIVERY STATUS TRANSITION
+========================================================= */
+
+async function applyDeliveryStatusTransition(deliveryId, status, source = 'dashboard', note = null) {
+  const now = new Date().toISOString();
+  const { data: currentDelivery, error: currentError } = await supabase.from('deliveries').select('*, rider:riders(id, name, phone, status)').eq('id', deliveryId).maybeSingle();
+  if (currentError) return { error: currentError };
+  if (!currentDelivery) return { error: new Error('Delivery not found') };
+  const fields = { status };
+  if (status === STATUS.PICKED_UP) fields.picked_up_at = now;
+  if (status === STATUS.DELIVERED) fields.delivered_at = now;
+  const { data: updatedDelivery, error: updateError } = await supabase.from('deliveries').update(fields).eq('id', deliveryId).select('*, rider:riders(id, name, phone, status)').single();
+  if (updateError || !updatedDelivery) return { error: updateError || new Error('Delivery update failed') };
+  const eventResult = await recordEvent(updatedDelivery.id, status, source, note);
+  if (eventResult?.error) {
+    console.error('DELIVERY STATUS EVENT FAILED:', eventResult.error);
+    const rollbackFields = { status: currentDelivery.status };
+    if (status === STATUS.PICKED_UP) rollbackFields.picked_up_at = currentDelivery.picked_up_at || null;
+    if (status === STATUS.DELIVERED) rollbackFields.delivered_at = currentDelivery.delivered_at || null;
+    await supabase.from('deliveries').update(rollbackFields).eq('id', deliveryId);
+    return { error: eventResult.error };
+  }
+  if (status === STATUS.DELIVERED || status === STATUS.FAILED) {
+    if (updatedDelivery.rider_id) {
+      const { data: releasedRider, error: riderError } = await supabase.from('riders').update({ status: 'available' }).eq('id', updatedDelivery.rider_id).select('id, name, phone, status').single();
+      if (riderError || !releasedRider) {
+        console.error('RIDER AVAILABILITY ERROR:', riderError || new Error('Rider release failed'));
+        return { error: riderError || new Error('Rider could not be reactivated'), data: updatedDelivery, riderUpdateFailed: true };
+      }
+      console.log('RIDER RELEASED:', { deliveryId, riderId: releasedRider.id, status: releasedRider.status });
+    }
+  }
+  return { data: updatedDelivery };
+}
+
+/* =========================================================
    UPDATE DELIVERY STATUS
 ========================================================= */
 
-app.post(
-  '/api/deliveries/:id/status',
-  async (req, res) => {
-
-    try {
-
-      const parsed =
-        statusSchema.safeParse(
-          req.body
-        );
-
-
-      if (
-        !parsed.success
-      ) {
-
-        return res
-          .status(400)
-          .json({
-
-            error:
-              'Status must be picked_up, delivered, or failed'
-
-          });
-
-      }
-
-
-      const status =
-        parsed.data.status;
-
-
-      const now =
-        new Date()
-          .toISOString();
-
-
-      const fields = {
-
-        status
-
-      };
-
-
-      /* -----------------------------------------
-         PICKED UP
-      ----------------------------------------- */
-
-      if (
-        status ===
-        STATUS.PICKED_UP
-      ) {
-
-        fields.picked_up_at =
-          now;
-
-      }
-
-
-      /* -----------------------------------------
-         DELIVERED
-      ----------------------------------------- */
-
-      if (
-        status ===
-        STATUS.DELIVERED
-      ) {
-
-        fields.delivered_at =
-          now;
-
-      }
-
-
-      /* -----------------------------------------
-         FAILED
-      ----------------------------------------- */
-
-      if (
-        status ===
-        STATUS.FAILED
-      ) {
-
-        /*
-         * Your deliveries schema does NOT show
-         * a failed_at column.
-         *
-         * Therefore we only update status.
-         */
-
-      }
-
-
-      /* -----------------------------------------
-         UPDATE DELIVERY
-      ----------------------------------------- */
-
-      const {
-        data,
-        error
-      } =
-        await supabase
-          .from('deliveries')
-          .update(fields)
-          .eq(
-            'id',
-            req.params.id
-          )
-          .select(`
-            *,
-            rider:riders(
-              id,
-              name,
-              phone,
-              status
-            )
-          `)
-          .single();
-
-
-      if (error) {
-
-        console.error(
-          'STATUS UPDATE ERROR:',
-          error
-        );
-
-
-        return res
-          .status(500)
-          .json({
-
-            error:
-              error.message
-
-          });
-
-      }
-
-
-      if (!data) {
-
-        return res
-          .status(404)
-          .json({
-
-            error:
-              'Delivery not found'
-
-          });
-
-      }
-
-
-      /* -----------------------------------------
-         RECORD EVENT
-      ----------------------------------------- */
-
-      await recordEvent(
-
-        data.id,
-
-        status,
-
-        'dashboard',
-
-        parsed.data.note || null
-
-      );
-
-
-      /* -----------------------------------------
-         FREE RIDER
-      ----------------------------------------- */
-
-      if (
-        status ===
-          STATUS.DELIVERED ||
-        status ===
-          STATUS.FAILED
-      ) {
-
-        if (
-          data.rider_id
-        ) {
-
-          const {
-            error: riderError
-          } =
-            await supabase
-              .from('riders')
-              .update({
-
-                status:
-                  'available'
-
-              })
-              .eq(
-                'id',
-                data.rider_id
-              );
-
-
-          if (
-            riderError
-          ) {
-
-            console.error(
-              'RIDER AVAILABILITY ERROR:',
-              riderError
-            );
-
-          }
-
-        }
-
-      }
-
-
-      return res.json(
-        data
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        'STATUS UPDATE EXCEPTION:',
-        error
-      );
-
-
-      return res
-        .status(500)
-        .json({
-
-          error:
-            'Unable to update delivery status'
-
-        });
-
-    }
-
+app.post('/api/deliveries/:id/status', async (req, res) => {
+  try {
+    const parsed = statusSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Status must be picked_up, delivered, or failed' });
+    const result = await applyDeliveryStatusTransition(req.params.id, parsed.data.status, 'dashboard', parsed.data.note || null);
+    if (result.error) return res.status(500).json({ error: result.error.message || 'Unable to update delivery status' });
+    return res.json(result.data);
+  } catch (error) {
+    console.error('STATUS UPDATE EXCEPTION:', error);
+    return res.status(500).json({ error: 'Unable to update delivery status' });
   }
-);
-
+});
 /* =========================================================
    WHATSAPP SEND MESSAGE
 ========================================================= */
@@ -1685,132 +1487,34 @@ async function handleRiderButtonAction(from, buttonId) {
       await sendWhatsAppMessage(from, `⚠️ Delivery *${delivery.delivery_code}* is not currently assigned, so it cannot be marked picked up.`);
       return true;
     }
-
-    const now = new Date().toISOString();
-    const { data: updatedDelivery, error: updateError } =
-      await supabase
-        .from('deliveries')
-        .update({
-          status: STATUS.PICKED_UP,
-          picked_up_at: now
-        })
-        .eq('id', delivery.id)
-        .eq('rider_id', rider.id)
-        .select()
-        .single();
-
-    if (updateError || !updatedDelivery) {
-      console.error('RIDER PICKED-UP UPDATE ERROR:', updateError);
+    const result = await applyDeliveryStatusTransition(delivery.id, STATUS.PICKED_UP, 'whatsapp', `Picked up by ${rider.name}`);
+    if (result.error) {
+      console.error('RIDER PICKED-UP TRANSITION FAILED:', result.error);
       await sendWhatsAppMessage(from, '⚠️ I could not mark this delivery as picked up. Please try again.');
       return true;
     }
-
-    const eventResult = await recordEvent(
-      delivery.id,
-      STATUS.PICKED_UP,
-      'whatsapp',
-      `Picked up by ${rider.name}`
-    );
-
-    if (eventResult.error) {
-      console.error('RIDER PICKED-UP EVENT FAILED:', eventResult.error);
-      await supabase
-        .from('deliveries')
-        .update({
-          status: STATUS.ASSIGNED,
-          picked_up_at: null
-        })
-        .eq('id', delivery.id);
-
-      await sendWhatsAppMessage(from, '⚠️ The pickup could not be recorded completely. Please try again.');
-      return true;
-    }
-
-    console.log('RIDER PICKED-UP EVENT RECORDED:', delivery.id);
-
-    await sendWhatsAppButtons(
-      from,
-      `📦 *Delivery Picked Up*\n\n` +
-      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
-      `👤 Customer: ${delivery.customer_name}\n` +
-      `📍 Delivery Location: ${delivery.delivery_address}\n` +
-      `📌 Status: *PICKED UP*\n\n` +
-      `When you have completed the delivery, tap the button below.`,
-      [
-        { id: `DELIVERED:${delivery.id}`, title: '✅ Mark Delivered' },
-        { id: `NOT_DELIVERED:${delivery.id}`, title: '❌ Mark Not Delivered' }
-      ]
-    );
-
+    await sendWhatsAppButtons(from, `📦 *Delivery Picked Up*\n\n` + `🆔 Delivery Code: *${delivery.delivery_code}*\n` + `👤 Customer: ${delivery.customer_name}\n` + `📍 Delivery Location: ${delivery.delivery_address}\n` + `📌 Status: *PICKED UP*\n\n` + `When you have completed the delivery, tap the button below.`, [
+      { id: `DELIVERED:${delivery.id}`, title: '✅ Mark Delivered' },
+      { id: `NOT_DELIVERED:${delivery.id}`, title: '❌ Mark Not Delivered' }
+    ]);
     return true;
   }
 
   if (action === 'NOT_PICKED' || action === 'NOT_DELIVERED') {
     const expectedStatus = action === 'NOT_PICKED' ? STATUS.ASSIGNED : STATUS.PICKED_UP;
     const failureStatusLabel = action === 'NOT_PICKED' ? 'NOT PICKED' : 'NOT DELIVERED';
-    const failureNote = action === 'NOT_PICKED'
-      ? `Not picked by ${rider.name}`
-      : `Not delivered by ${rider.name}`;
-
+    const failureNote = action === 'NOT_PICKED' ? `Not picked by ${rider.name}` : `Not delivered by ${rider.name}`;
     if (delivery.status !== expectedStatus) {
-      await sendWhatsAppMessage(
-        from,
-        `⚠️ Delivery *${delivery.delivery_code}* cannot be marked ${failureStatusLabel.toLowerCase()} because its current status is *${String(delivery.status).toUpperCase()}*.`
-      );
+      await sendWhatsAppMessage(from, `⚠️ Delivery *${delivery.delivery_code}* cannot be marked ${failureStatusLabel.toLowerCase()} because its current status is *${String(delivery.status).toUpperCase()}*.`);
       return true;
     }
-
-    const previousStatus = delivery.status;
-    const { error: updateError } = await supabase
-      .from('deliveries')
-      .update({ status: STATUS.FAILED })
-      .eq('id', delivery.id)
-      .eq('rider_id', rider.id);
-
-    if (updateError) {
-      console.error('RIDER FAILURE UPDATE ERROR:', updateError);
-      await sendWhatsAppMessage(from, '⚠️ I could not update this delivery. Please try again.');
+    const result = await applyDeliveryStatusTransition(delivery.id, STATUS.FAILED, 'whatsapp', failureNote);
+    if (result.error) {
+      console.error(`RIDER ${failureStatusLabel} TRANSITION FAILED:`, result.error);
+      await sendWhatsAppMessage(from, '⚠️ The delivery could not be marked failed completely. Please try again.');
       return true;
     }
-
-    const eventResult = await recordEvent(
-      delivery.id,
-      STATUS.FAILED,
-      'whatsapp',
-      failureNote
-    );
-
-    if (eventResult.error) {
-      console.error('RIDER FAILURE EVENT FAILED:', eventResult.error);
-      await supabase
-        .from('deliveries')
-        .update({ status: previousStatus })
-        .eq('id', delivery.id);
-
-      await sendWhatsAppMessage(from, '⚠️ The failure could not be recorded completely. Please try again.');
-      return true;
-    }
-
-    const { error: riderUpdateError } = await supabase
-      .from('riders')
-      .update({ status: 'available' })
-      .eq('id', rider.id);
-
-    if (riderUpdateError) {
-      console.error('RIDER AVAILABLE UPDATE ERROR:', riderUpdateError);
-    }
-
-    console.log(`RIDER ${failureStatusLabel} EVENT RECORDED:`, delivery.id);
-
-    await sendWhatsAppMessage(
-      from,
-      `❌ *Delivery ${failureStatusLabel}*\n\n` +
-      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
-      `👤 Customer: ${delivery.customer_name}\n` +
-      `📌 Status: *FAILED*\n\n` +
-      `The delivery has been marked as failed. You are now *AVAILABLE* for the next delivery. 🛵`
-    );
-
+    await sendWhatsAppMessage(from, `❌ *Delivery ${failureStatusLabel}*\n\n` + `🆔 Delivery Code: *${delivery.delivery_code}*\n` + `👤 Customer: ${delivery.customer_name}\n` + `📌 Status: *FAILED*\n\n` + `The delivery has been marked as failed. You are now *AVAILABLE* for the next delivery. 🛵`);
     return true;
   }
 
@@ -1819,68 +1523,13 @@ async function handleRiderButtonAction(from, buttonId) {
       await sendWhatsAppMessage(from, `⚠️ Delivery *${delivery.delivery_code}* must be marked picked up before it can be delivered.`);
       return true;
     }
-
-    const now = new Date().toISOString();
-    const { data: updatedDelivery, error: updateError } =
-      await supabase
-        .from('deliveries')
-        .update({
-          status: STATUS.DELIVERED,
-          delivered_at: now
-        })
-        .eq('id', delivery.id)
-        .eq('rider_id', rider.id)
-        .select()
-        .single();
-
-    if (updateError || !updatedDelivery) {
-      console.error('RIDER DELIVERED UPDATE ERROR:', updateError);
+    const result = await applyDeliveryStatusTransition(delivery.id, STATUS.DELIVERED, 'whatsapp', `Delivered by ${rider.name}`);
+    if (result.error) {
+      console.error('RIDER DELIVERED TRANSITION FAILED:', result.error);
       await sendWhatsAppMessage(from, '⚠️ I could not mark this delivery as delivered. Please try again.');
       return true;
     }
-
-    const eventResult = await recordEvent(
-      delivery.id,
-      STATUS.DELIVERED,
-      'whatsapp',
-      `Delivered by ${rider.name}`
-    );
-
-    if (eventResult.error) {
-      console.error('RIDER DELIVERED EVENT FAILED:', eventResult.error);
-      await supabase
-        .from('deliveries')
-        .update({
-          status: STATUS.PICKED_UP,
-          delivered_at: null
-        })
-        .eq('id', delivery.id);
-
-      await sendWhatsAppMessage(from, '⚠️ The delivery completion could not be recorded completely. Please try again.');
-      return true;
-    }
-
-    const { error: riderUpdateError } =
-      await supabase
-        .from('riders')
-        .update({ status: 'available' })
-        .eq('id', rider.id);
-
-    if (riderUpdateError) {
-      console.error('RIDER AVAILABLE UPDATE ERROR:', riderUpdateError);
-    }
-
-    console.log('RIDER DELIVERED EVENT RECORDED:', delivery.id);
-
-    await sendWhatsAppMessage(
-      from,
-      `🎉 *Delivery Completed!*\n\n` +
-      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
-      `👤 Customer: ${delivery.customer_name}\n` +
-      `📌 Status: *DELIVERED*\n\n` +
-      `Thank you, ${rider.name}! You are now marked as *AVAILABLE* for the next delivery. 🛵`
-    );
-
+    await sendWhatsAppMessage(from, `✅ *Delivery Completed*\n\n` + `🆔 Delivery Code: *${delivery.delivery_code}*\n` + `👤 Customer: ${delivery.customer_name}\n` + `📌 Status: *DELIVERED*\n\n` + `Thank you, ${rider.name}. You are now *AVAILABLE* for the next delivery. 🛵`);
     return true;
   }
 
