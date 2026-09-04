@@ -1,4 +1,4 @@
-Reflex — Server: WhatsApp + Dashboard Status Sync
+/*Reflex — Server: WhatsApp + Dashboard Status Sync
 Final source file for the Reflex Delivery System.
 Changes
 •	WhatsApp and dashboard manual status changes now use the same shared delivery-status transition logic.
@@ -7,7 +7,7 @@ Changes
 •	Event recording and rollback remain protected.
 •	The four WhatsApp rider actions remain: Mark Picked Up, Mark Not Picked, Mark Delivered, Mark Not Delivered.
 •	No nonexistent database fields were introduced.
-Source code
+Source code*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
