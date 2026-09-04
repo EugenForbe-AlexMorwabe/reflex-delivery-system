@@ -1,10 +1,10 @@
-'''Reflex Delivery — Complete server.js
+/*Reflex Delivery — Complete server.js
 Complete updated server file
 This version keeps the working Reflex Delivery backend and adds the WhatsApp conversation state machine. It collects customer name, phone, delivery address and item description, shows a confirmation summary, and creates a pending delivery in the existing Supabase deliveries table when the sender replies YES.
 Deployment
 Replace the entire contents of src/server.js with the code below. Do not add a second WhatsApp webhook. Commit and push the file to GitHub, then allow Render to deploy the new version.
 Complete server.js
-'''
+*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
