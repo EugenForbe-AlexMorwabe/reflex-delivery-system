@@ -1,10 +1,10 @@
-/*Reflex Delivery — Complete server.js
-Complete updated server file
-This version keeps the working Reflex Delivery backend and adds the WhatsApp conversation state machine. It collects customer name, phone, delivery address and item description, shows a confirmation summary, and creates a pending delivery in the existing Supabase deliveries table when the sender replies YES.
+/*Reflex Delivery — Complete server.js (WhatsApp State Machine)
+Corrected complete server.js. The WhatsApp webhook now maintains a conversation state per WhatsApp sender instead of restarting the welcome message for every incoming text.
+Conversation flow
+Hi → customer name → customer phone → delivery address → item → confirmation → YES creates a pending delivery in the existing Supabase deliveries table. NO/CANCEL cancels. A new Hi restarts the conversation.
 Deployment
-Replace the entire contents of src/server.js with the code below. Do not add a second WhatsApp webhook. Commit and push the file to GitHub, then allow Render to deploy the new version.
-Complete server.js
-*/
+Replace the entire contents of src/server.js with the code below. Do not add a second WhatsApp webhook. Commit and push to GitHub, then allow Render to deploy.
+Complete server.js*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1421,150 +1421,231 @@ app.get(
 
 
 /* =========================================================
+   WHATSAPP CONVERSATION STATE
+========================================================= */
+
+const whatsappSessions = new Map();
+
+function normalizePhone(phone) {
+  const value = String(phone || '').replace(/\D/g, '');
+  if (value.startsWith('254')) return value;
+  if (value.startsWith('0') && value.length === 10) return `254${value.slice(1)}`;
+  return value;
+}
+
+function resetWhatsAppSession(phone) {
+  const key = normalizePhone(phone);
+  const session = { state: 'customer_name', data: {} };
+  whatsappSessions.set(key, session);
+  return session;
+}
+
+function isStartCommand(text) {
+  return ['hi', 'hello', 'hey', 'start', 'menu'].includes(String(text || '').trim().toLowerCase());
+}
+
+function isCancelCommand(text) {
+  return ['cancel', 'stop', 'quit', 'exit'].includes(String(text || '').trim().toLowerCase());
+}
+
+function isYes(text) {
+  return ['yes', 'y', 'confirm', 'confirmed'].includes(String(text || '').trim().toLowerCase());
+}
+
+function isNo(text) {
+  return ['no', 'n'].includes(String(text || '').trim().toLowerCase());
+}
+
+/* =========================================================
    WHATSAPP INBOUND WEBHOOK
 ========================================================= */
 
-app.post(
-  '/api/whatsapp/webhook',
-  async (req, res) => {
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  console.log('');
+  console.log('========================================');
+  console.log('WHATSAPP WEBHOOK HIT');
+  console.log('========================================');
 
-    console.log('');
-    console.log('========================================');
-    console.log('WHATSAPP WEBHOOK HIT');
-    console.log('========================================');
+  try {
+    const body = req.body;
+    console.log('Incoming WhatsApp payload:', JSON.stringify(body, null, 2));
 
-    try {
+    for (const entry of body?.entry || []) {
+      for (const change of entry?.changes || []) {
+        for (const message of change?.value?.messages || []) {
+          if (message?.type !== 'text') {
+            console.log('Ignoring non-text WhatsApp message:', message?.type);
+            continue;
+          }
 
-      const body = req.body;
+          const from = normalizePhone(message?.from);
+          const text = message?.text?.body?.trim();
 
-      console.log(
-        'Incoming WhatsApp payload:',
-        JSON.stringify(
-          body,
-          null,
-          2
-        )
-      );
+          console.log('WhatsApp sender:', from);
+          console.log('WhatsApp message:', text);
 
-      const entries =
-        body?.entry || [];
+          if (!from || !text) continue;
 
-      for (const entry of entries) {
+          try {
+            let session = whatsappSessions.get(from);
 
-        const changes =
-          entry?.changes || [];
-
-        for (const change of changes) {
-
-          const value =
-            change?.value;
-
-          const messages =
-            value?.messages || [];
-
-          for (const message of messages) {
-
-            /*
-             * We only handle text messages
-             * for this first test.
-             */
-
-            if (
-              message?.type !== 'text'
-            ) {
-              console.log(
-                'Ignoring non-text WhatsApp message:',
-                message?.type
+            if (!session || isStartCommand(text)) {
+              session = resetWhatsAppSession(from);
+              await sendWhatsAppMessage(from,
+                `👋 Welcome to Reflex Delivery!\n\n` +
+                `Let's create a delivery.\n\n` +
+                `Please enter the customer's name.`
               );
-
               continue;
             }
 
-            const from =
-              message?.from;
-
-            const text =
-              message?.text?.body?.trim();
-
-            console.log(
-              'WhatsApp sender:',
-              from
-            );
-
-            console.log(
-              'WhatsApp message:',
-              text
-            );
-
-            if (
-              !from ||
-              !text
-            ) {
-              console.log(
-                'Missing sender or message text'
+            if (isCancelCommand(text)) {
+              resetWhatsAppSession(from);
+              await sendWhatsAppMessage(from,
+                `❌ Delivery creation cancelled.\n\nSend *Hi* whenever you want to create a new delivery.`
               );
-
               continue;
             }
 
-            /*
-             * FIRST REFLEX RESPONSE
-             */
+            switch (session.state) {
+              case 'customer_name':
+                if (text.length < 2) {
+                  await sendWhatsAppMessage(from, `Please enter a valid customer's name.`);
+                  break;
+                }
+                session.data.customer_name = text;
+                session.state = 'customer_phone';
+                await sendWhatsAppMessage(from, `Thanks! 👍\n\nPlease enter the customer's phone number.`);
+                break;
 
-            const reply =
-              `👋 Welcome to Reflex Delivery!\n\n` +
-              `Let's create a delivery.\n\n` +
-              `Please enter the customer's name.`;
+              case 'customer_phone': {
+                const phone = normalizePhone(text);
+                if (phone.length < 9) {
+                  await sendWhatsAppMessage(from, `Please enter a valid phone number, for example *0712345678*.`);
+                  break;
+                }
+                session.data.customer_phone = phone;
+                session.state = 'delivery_address';
+                await sendWhatsAppMessage(from, `Got it. 📍\n\nPlease enter the delivery address or location.`);
+                break;
+              }
 
+              case 'delivery_address':
+                if (text.length < 3) {
+                  await sendWhatsAppMessage(from, `Please enter a more complete delivery address.`);
+                  break;
+                }
+                session.data.delivery_address = text;
+                session.state = 'item_description';
+                await sendWhatsAppMessage(from, `Perfect. 📦\n\nWhat item is being delivered?`);
+                break;
+
+              case 'item_description': {
+                if (text.length < 2) {
+                  await sendWhatsAppMessage(from, `Please enter a short description of the item.`);
+                  break;
+                }
+                session.data.item_description = text;
+                session.state = 'confirmation';
+                const d = session.data;
+                await sendWhatsAppMessage(from,
+                  `📋 *Delivery Summary*\n\n` +
+                  `👤 Customer: ${d.customer_name}\n` +
+                  `📱 Phone: ${d.customer_phone}\n` +
+                  `📍 Address: ${d.delivery_address}\n` +
+                  `📦 Item: ${d.item_description}\n\n` +
+                  `Reply *YES* to create this delivery.\nReply *NO* to cancel.`
+                );
+                break;
+              }
+
+              case 'confirmation': {
+                if (isNo(text)) {
+                  resetWhatsAppSession(from);
+                  await sendWhatsAppMessage(from, `❌ Delivery cancelled.\n\nSend *Hi* to start again.`);
+                  break;
+                }
+
+                if (!isYes(text)) {
+                  await sendWhatsAppMessage(from, `Please reply *YES* to create the delivery or *NO* to cancel.`);
+                  break;
+                }
+
+                const d = session.data;
+                const payload = {
+                  retailer_name: 'WhatsApp Retailer',
+                  customer_name: d.customer_name,
+                  customer_phone: d.customer_phone,
+                  delivery_address: d.delivery_address,
+                  item_description: d.item_description,
+                  delivery_code: generateDeliveryCode(),
+                  status: STATUS.PENDING
+                };
+
+                console.log('WHATSAPP CREATE DELIVERY:', payload);
+
+                const { data: delivery, error: deliveryError } = await supabase
+                  .from('deliveries')
+                  .insert(payload)
+                  .select()
+                  .single();
+
+                if (deliveryError) {
+                  console.error('WHATSAPP CREATE DELIVERY ERROR:', deliveryError);
+                  await sendWhatsAppMessage(from,
+                    `⚠️ I couldn't create the delivery right now.\n\nPlease try again in a moment.`
+                  );
+                  break;
+                }
+
+                await recordEvent(
+                  delivery.id,
+                  STATUS.PENDING,
+                  'whatsapp',
+                  'Delivery created through WhatsApp'
+                );
+
+                resetWhatsAppSession(from);
+
+                await sendWhatsAppMessage(from,
+                  `✅ *Delivery created successfully!*\n\n` +
+                  `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
+                  `👤 Customer: ${delivery.customer_name}\n` +
+                  `📱 Phone: ${delivery.customer_phone}\n` +
+                  `📍 Address: ${delivery.delivery_address}\n` +
+                  `📦 Item: ${delivery.item_description}\n` +
+                  `📌 Status: *PENDING*\n\n` +
+                  `The delivery is now in the Reflex dashboard.`
+                );
+                break;
+              }
+
+              default:
+                resetWhatsAppSession(from);
+                await sendWhatsAppMessage(from, `Let's start a new delivery.\n\nPlease enter the customer's name.`);
+                break;
+            }
+          } catch (conversationError) {
+            console.error('WHATSAPP CONVERSATION ERROR:', conversationError);
             try {
-
-              await sendWhatsAppMessage(
-                from,
-                reply
+              await sendWhatsAppMessage(from,
+                `⚠️ Something went wrong while processing that message.\n\nPlease send *Hi* to start a new delivery.`
               );
-
-              console.log(
-                'WhatsApp reply sent successfully to:',
-                from
-              );
-
-            } catch (smsError) {
-
-              console.error(
-                'WhatsApp send error:',
-                smsError.message
-              );
-
+            } catch (sendError) {
+              console.error('WHATSAPP ERROR RESPONSE FAILED:', sendError);
             }
           }
         }
       }
-
-      console.log(
-        '========================================'
-      );
-
-      return res
-        .status(200)
-        .send('EVENT_RECEIVED');
-
-    } catch (error) {
-
-      console.error(
-        'WHATSAPP WEBHOOK ERROR:',
-        error
-      );
-
-      /*
-       * Still acknowledge Meta.
-       */
-
-      return res
-        .status(200)
-        .send('EVENT_RECEIVED');
     }
+
+    console.log('========================================');
+    return res.status(200).send('EVENT_RECEIVED');
+  } catch (error) {
+    console.error('WHATSAPP WEBHOOK ERROR:', error);
+    return res.status(200).send('EVENT_RECEIVED');
   }
-);
+});
 
 /* =========================================================
    FRONTEND FALLBACK
