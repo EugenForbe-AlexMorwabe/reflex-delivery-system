@@ -1,13 +1,15 @@
-/*Reflex — Dashboard: Manual Override Workflow Sync (Corrected)
-This version is patched directly from the user's actual current public/app.js. It preserves the existing dashboard logic and changes only the delivery status actions and status-update payload needed to match the server API.
-Workflow
-Pending / Failed → Assign rider
-Assigned → 📦 Mark picked up / ❌ Mark not picked
-Picked Up → ✅ Mark delivered / ❌ Mark not delivered
-Delivered → no action
-Important compatibility fix
-The server status API expects lowercase database values: picked_up, delivered, failed. The dashboard buttons therefore send those exact values. Failure buttons also send the contextual note: Not picked or Not delivered.
-Source code*/
+/*Reflex Delivery System — Corrected Dashboard app.js
+Corrected deployable version of the actual dashboard public/app.js. This version sends the lowercase status values expected by the server API and matches the WhatsApp manual-override workflow.
+Dashboard workflow
+•	Pending → Assign rider
+•	Failed → Assign rider
+•	Assigned → 📦 Mark picked up / ❌ Mark not picked
+•	Picked Up → ✅ Mark delivered / ❌ Mark not delivered
+•	Delivered → no action
+API status values
+The dashboard sends picked_up, delivered, and failed to the server. Failure actions also send the notes Not picked and Not delivered.
+Complete app.js*/
+
 'use strict';
 
 console.log('🔥 REFLEX APP.JS LOADED - NEW VERSION 🔥');
@@ -492,7 +494,6 @@ function renderDelivery(
           📦 Mark picked up
         </button>
 
-
         <button
           type="button"
           onclick="updateDeliveryStatus(
@@ -530,7 +531,6 @@ function renderDelivery(
         >
           ✅ Mark delivered
         </button>
-
 
         <button
           type="button"
