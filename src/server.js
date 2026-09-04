@@ -1,12 +1,3 @@
-/*Reflex Delivery System — Server.js
-WhatsApp Mark Picked Up and Render Dashboard Mark Picked Up are now matched. The dashboard endpoint normalizes its incoming status and then uses the exact same STATUS.PICKED_UP constant and applyDeliveryStatusTransition() helper as WhatsApp.
-What changed
-• Dashboard accepts picked_up and UI label variants such as Picked Up.
-• Dashboard converts them to STATUS.PICKED_UP before processing.
-• Dashboard calls applyDeliveryStatusTransition(), exactly like WhatsApp.
-• Existing rider validation, event recording, timestamps, and rider release remain intact.
-Complete server.js
-*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -491,7 +482,9 @@ app.get(
 
         delivered: 0,
 
-        failed: 0
+        failed: 0,
+
+        pending_failed: 0
 
       };
 
@@ -517,6 +510,16 @@ app.get(
           ) {
 
             counts[status]++;
+
+          }
+
+
+          if (
+            status === STATUS.PENDING ||
+            status === STATUS.FAILED
+          ) {
+
+            counts.pending_failed++;
 
           }
 
