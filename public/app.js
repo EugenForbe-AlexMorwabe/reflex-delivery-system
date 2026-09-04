@@ -1,10 +1,15 @@
-/*REFLEX DELIVERY SYSTEM — Fixed Dashboard Frontend
-public/app.js
-Complete deployment code • September 2026
-Complete Code8*/
+/*REFLEX DELIVERY SYSTEM
+Dashboard Statistics — Fixed app.js
+Complete replacement for public/app.js • September 2026
+What was fixed
+•	Pending and Failed are combined into one Pending / Failed card.
+•	Picked Up now correctly reads the backend key picked_up.
+•	Dashboard automatically refreshes every 5 seconds while the page is visible.
+•	The complete existing dashboard workflow is preserved.
+Complete public/app.js*/
 'use strict';
 
-console.log('🔥 REFLEX APP.JS LOADED - NEW VERSION 🔥');
+console.log('🔥 REFLEX APP.JS LOADED - DASHBOARD STATS FIX 🔥');
 
 /*
 ========================================================
@@ -244,15 +249,15 @@ function renderStats(counts) {
     <div class="stat">
 
       <b>
-        ${pending}
+        ${pendingFailed}
       </b>
 
       <span>
-        Pending
+        Pending / Failed
       </span>
 
       <small>
-        Requests waiting for assignment
+        Requests needing assignment or follow-up
       </small>
 
     </div>
@@ -336,14 +341,21 @@ function getStatusCount(
     Object.keys(counts).find(
       function (item) {
 
-        return (
+        const keyStatus =
           String(item)
             .trim()
-            .toLowerCase() ===
+            .toLowerCase()
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ');
+
+        const requested =
           String(requestedStatus)
             .trim()
             .toLowerCase()
-        );
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ');
+
+        return keyStatus === requested;
 
       }
     );
