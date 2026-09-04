@@ -1,5 +1,6 @@
-/*Reflex Delivery System — server.js
-Buttons-only rider WhatsApp workflow: Mark Picked Up and Mark Delivered.*/
+/*Reflex Delivery System — Rider Buttons Phone Matching Fix
+Fixes the rider button error caused by phone-number formatting differences (for example 0712345678 vs 254712345678 vs +254 712 345 678). The rider button handler now normalizes both the incoming WhatsApp number and the phone numbers stored in the riders table before matching.
+*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1616,18 +1617,36 @@ async function handleRiderButtonAction(from, buttonId) {
     { from, action, deliveryId }
   );
 
-  const { data: rider, error: riderError } =
+  // WhatsApp sends the rider number in international format (2547...),
+  // while the riders table may contain 07..., +254..., spaces, or other
+  // formatting. Load the riders and compare normalized phone numbers so
+  // all supported formats resolve to the same WhatsApp number.
+  const { data: riders, error: riderError } =
     await supabase
       .from('riders')
-      .select('id, name, phone, status')
-      .eq('phone', from)
-      .maybeSingle();
+      .select('id, name, phone, status');
 
   if (riderError) {
     console.error('RIDER BUTTON RIDER LOOKUP ERROR:', riderError);
     await sendWhatsAppMessage(from, '⚠️ I could not verify your rider account. Please contact Reflex support.');
     return true;
   }
+
+  const normalizedFrom = normalizePhone(from);
+
+  const rider = (riders || []).find(
+    (candidate) => normalizePhone(candidate.phone) === normalizedFrom
+  );
+
+  console.log(
+    'RIDER BUTTON PHONE MATCH:',
+    {
+      whatsappPhone: normalizedFrom,
+      rider: rider
+        ? { id: rider.id, name: rider.name, phone: rider.phone }
+        : null
+    }
+  );
 
   if (!rider) {
     await sendWhatsAppMessage(from, '⚠️ This WhatsApp number is not registered to a Reflex rider.');
