@@ -1,13 +1,12 @@
-/*Reflex — Server: WhatsApp + Dashboard Status Sync
-Final source file for the Reflex Delivery System.
-Changes
-•	WhatsApp and dashboard manual status changes now use the same shared delivery-status transition logic.
-•	Delivered and failed transitions release the assigned rider to status=available.
-•	Rider release is verified and errors are surfaced instead of silently ignored.
-•	Event recording and rollback remain protected.
-•	The four WhatsApp rider actions remain: Mark Picked Up, Mark Not Picked, Mark Delivered, Mark Not Delivered.
-•	No nonexistent database fields were introduced.
-Source code*/
+/*Reflex Delivery System — Server.js
+WhatsApp Mark Picked Up and Render Dashboard Mark Picked Up are now matched. The dashboard endpoint normalizes its incoming status and then uses the exact same STATUS.PICKED_UP constant and applyDeliveryStatusTransition() helper as WhatsApp.
+What changed
+• Dashboard accepts picked_up and UI label variants such as Picked Up.
+• Dashboard converts them to STATUS.PICKED_UP before processing.
+• Dashboard calls applyDeliveryStatusTransition(), exactly like WhatsApp.
+• Existing rider validation, event recording, timestamps, and rider release remain intact.
+Complete server.js
+*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1173,14 +1172,56 @@ async function applyDeliveryStatusTransition(deliveryId, status, source = 'dashb
 
 app.post('/api/deliveries/:id/status', async (req, res) => {
   try {
-    const parsed = statusSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Status must be picked_up, delivered, or failed' });
-    const result = await applyDeliveryStatusTransition(req.params.id, parsed.data.status, 'dashboard', parsed.data.note || null);
-    if (result.error) return res.status(500).json({ error: result.error.message || 'Unable to update delivery status' });
+    /*
+     * MATCH THE WORKING WHATSAPP STATUS PATH
+     *
+     * WhatsApp uses the canonical STATUS constants directly.
+     * The dashboard now normalizes both canonical values and
+     * human-readable UI labels to those same constants, then
+     * calls the exact same shared transition helper.
+     */
+    const rawStatus = String(req.body?.status || '').trim().toLowerCase();
+
+    const canonicalStatus =
+      rawStatus === STATUS.PICKED_UP ||
+      rawStatus === 'picked up' ||
+      rawStatus === 'pickedup'
+        ? STATUS.PICKED_UP
+        : rawStatus === STATUS.DELIVERED ||
+          rawStatus === 'delivered'
+        ? STATUS.DELIVERED
+        : rawStatus === STATUS.FAILED ||
+          rawStatus === 'failed' ||
+          rawStatus === 'not picked' ||
+          rawStatus === 'not delivered'
+        ? STATUS.FAILED
+        : null;
+
+    if (!canonicalStatus) {
+      return res.status(400).json({
+        error: 'Status must be picked_up, delivered, or failed'
+      });
+    }
+
+    const result = await applyDeliveryStatusTransition(
+      req.params.id,
+      canonicalStatus,
+      'dashboard',
+      req.body?.note || null
+    );
+
+    if (result.error) {
+      return res.status(500).json({
+        error: result.error.message || 'Unable to update delivery status'
+      });
+    }
+
     return res.json(result.data);
   } catch (error) {
     console.error('STATUS UPDATE EXCEPTION:', error);
-    return res.status(500).json({ error: 'Unable to update delivery status' });
+    return res.status(500).json({
+      error: 'Unable to update delivery status'
+    });
   }
 });
 /* =========================================================
