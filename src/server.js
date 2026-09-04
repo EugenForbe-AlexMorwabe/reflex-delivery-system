@@ -1,10 +1,3 @@
-/*Reflex Delivery — Complete server.js (WhatsApp State Machine)
-Corrected complete server.js. The WhatsApp webhook now maintains a conversation state per WhatsApp sender instead of restarting the welcome message for every incoming text.
-Conversation flow
-Hi → customer name → customer phone → delivery address → item → confirmation → YES creates a pending delivery in the existing Supabase deliveries table. NO/CANCEL cancels. A new Hi restarts the conversation.
-Deployment
-Replace the entire contents of src/server.js with the code below. Do not add a second WhatsApp webhook. Commit and push to GitHub, then allow Render to deploy.
-Complete server.js*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1616,6 +1609,14 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
                   `📦 Item: ${delivery.item_description}\n` +
                   `📌 Status: *PENDING*\n\n` +
                   `The delivery is now in the Reflex dashboard.`
+                );
+
+                // The delivery has been posted successfully. The session was
+                // already reset above, so the sender is ready for a new request.
+                await sendWhatsAppMessage(from,
+                  `🙏 *Thank you for trusting us with your deliveries!*\n\n` +
+                  `🔄 Reflex is ready for your next delivery request.\n` +
+                  `When you're ready, send *Hi* to begin your next transaction.`
                 );
                 break;
               }
