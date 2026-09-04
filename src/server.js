@@ -1,6 +1,5 @@
-/*Reflex Delivery System — server.js (Picked Up Update)
-Based on server_fixed_copy_NEXT_DELIVERY_READY_RIDER_NOTIFICATION_EVENT_FIX.docx. Adds rider WhatsApp PICKED command handling while preserving existing delivery, assignment, event, and WhatsApp flows.
-*/
+/*Reflex Delivery System — server.js
+Buttons-only rider WhatsApp workflow: Mark Picked Up and Mark Delivered.*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1006,7 +1005,7 @@ app.post(
             }
           );
 
-          await sendWhatsAppMessage(
+          await sendWhatsAppButtons(
             riderWhatsAppPhone,
             `🛵 *New Reflex Delivery Assignment*\n\n` +
             `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
@@ -1015,7 +1014,10 @@ app.post(
             `📍 Delivery Location: ${delivery.delivery_address}\n` +
             `📦 Item: ${delivery.item_description}\n` +
             `📌 Status: *ASSIGNED*\n\n` +
-            `Please collect the delivery and update Reflex when you have picked it up.`
+            `Please collect the delivery, then tap the button below.`,
+            [
+              { id: `PICKED_UP:${delivery.id}`, title: '📦 Mark Picked Up' }
+            ]
           );
 
           console.log(
@@ -1374,6 +1376,80 @@ app.post(
    WHATSAPP SEND MESSAGE
 ========================================================= */
 
+async function sendWhatsAppButtons(to, message, buttons) {
+  const phoneNumberId =
+    process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  const accessToken =
+    process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId) {
+    throw new Error(
+      'WHATSAPP_PHONE_NUMBER_ID is missing'
+    );
+  }
+
+  if (!accessToken) {
+    throw new Error(
+      'WHATSAPP_ACCESS_TOKEN is missing'
+    );
+  }
+
+  if (!Array.isArray(buttons) || buttons.length < 1 || buttons.length > 3) {
+    throw new Error(
+      'WhatsApp reply buttons must contain between 1 and 3 buttons'
+    );
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v25.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to,
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: {
+            text: message
+          },
+          action: {
+            buttons: buttons.map((button) => ({
+              type: 'reply',
+              reply: {
+                id: button.id,
+                title: button.title
+              }
+            }))
+          }
+        }
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  console.log(
+    'WhatsApp button send response:',
+    JSON.stringify(result, null, 2)
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message ||
+      'WhatsApp button message failed'
+    );
+  }
+
+  return result;
+}
+
 async function sendWhatsAppMessage(to, message) {
   const phoneNumberId =
     process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -1520,6 +1596,200 @@ function isNo(text) {
    WHATSAPP INBOUND WEBHOOK
 ========================================================= */
 
+async function handleRiderButtonAction(from, buttonId) {
+  const separatorIndex = buttonId.indexOf(':');
+
+  if (separatorIndex === -1) {
+    console.log('Unknown rider button:', buttonId);
+    return false;
+  }
+
+  const action = buttonId.slice(0, separatorIndex);
+  const deliveryId = buttonId.slice(separatorIndex + 1);
+
+  if (!['PICKED_UP', 'DELIVERED'].includes(action)) {
+    return false;
+  }
+
+  console.log(
+    'RIDER BUTTON ACTION:',
+    { from, action, deliveryId }
+  );
+
+  const { data: rider, error: riderError } =
+    await supabase
+      .from('riders')
+      .select('id, name, phone, status')
+      .eq('phone', from)
+      .maybeSingle();
+
+  if (riderError) {
+    console.error('RIDER BUTTON RIDER LOOKUP ERROR:', riderError);
+    await sendWhatsAppMessage(from, '⚠️ I could not verify your rider account. Please contact Reflex support.');
+    return true;
+  }
+
+  if (!rider) {
+    await sendWhatsAppMessage(from, '⚠️ This WhatsApp number is not registered to a Reflex rider.');
+    return true;
+  }
+
+  const { data: delivery, error: deliveryError } =
+    await supabase
+      .from('deliveries')
+      .select('*, rider:riders(id, name, phone, status)')
+      .eq('id', deliveryId)
+      .maybeSingle();
+
+  if (deliveryError || !delivery) {
+    console.error('RIDER BUTTON DELIVERY LOOKUP ERROR:', deliveryError);
+    await sendWhatsAppMessage(from, '⚠️ That delivery could not be found.');
+    return true;
+  }
+
+  const assignedRiderId = delivery.rider_id || delivery.rider?.id;
+  if (assignedRiderId !== rider.id) {
+    await sendWhatsAppMessage(from, '⚠️ This delivery is not assigned to your rider account.');
+    return true;
+  }
+
+  if (action === 'PICKED_UP') {
+    if (delivery.status !== STATUS.ASSIGNED) {
+      await sendWhatsAppMessage(from, `⚠️ Delivery *${delivery.delivery_code}* is not currently assigned, so it cannot be marked picked up.`);
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const { data: updatedDelivery, error: updateError } =
+      await supabase
+        .from('deliveries')
+        .update({
+          status: STATUS.PICKED_UP,
+          picked_up_at: now
+        })
+        .eq('id', delivery.id)
+        .eq('rider_id', rider.id)
+        .select()
+        .single();
+
+    if (updateError || !updatedDelivery) {
+      console.error('RIDER PICKED-UP UPDATE ERROR:', updateError);
+      await sendWhatsAppMessage(from, '⚠️ I could not mark this delivery as picked up. Please try again.');
+      return true;
+    }
+
+    const eventResult = await recordEvent(
+      delivery.id,
+      STATUS.PICKED_UP,
+      'whatsapp',
+      `Picked up by ${rider.name}`
+    );
+
+    if (eventResult.error) {
+      console.error('RIDER PICKED-UP EVENT FAILED:', eventResult.error);
+      await supabase
+        .from('deliveries')
+        .update({
+          status: STATUS.ASSIGNED,
+          picked_up_at: null
+        })
+        .eq('id', delivery.id);
+
+      await sendWhatsAppMessage(from, '⚠️ The pickup could not be recorded completely. Please try again.');
+      return true;
+    }
+
+    console.log('RIDER PICKED-UP EVENT RECORDED:', delivery.id);
+
+    await sendWhatsAppButtons(
+      from,
+      `📦 *Delivery Picked Up*\n\n` +
+      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
+      `👤 Customer: ${delivery.customer_name}\n` +
+      `📍 Delivery Location: ${delivery.delivery_address}\n` +
+      `📌 Status: *PICKED UP*\n\n` +
+      `When you have completed the delivery, tap the button below.`,
+      [
+        { id: `DELIVERED:${delivery.id}`, title: '✅ Mark Delivered' }
+      ]
+    );
+
+    return true;
+  }
+
+  if (action === 'DELIVERED') {
+    if (delivery.status !== STATUS.PICKED_UP) {
+      await sendWhatsAppMessage(from, `⚠️ Delivery *${delivery.delivery_code}* must be marked picked up before it can be delivered.`);
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const { data: updatedDelivery, error: updateError } =
+      await supabase
+        .from('deliveries')
+        .update({
+          status: STATUS.DELIVERED,
+          delivered_at: now
+        })
+        .eq('id', delivery.id)
+        .eq('rider_id', rider.id)
+        .select()
+        .single();
+
+    if (updateError || !updatedDelivery) {
+      console.error('RIDER DELIVERED UPDATE ERROR:', updateError);
+      await sendWhatsAppMessage(from, '⚠️ I could not mark this delivery as delivered. Please try again.');
+      return true;
+    }
+
+    const eventResult = await recordEvent(
+      delivery.id,
+      STATUS.DELIVERED,
+      'whatsapp',
+      `Delivered by ${rider.name}`
+    );
+
+    if (eventResult.error) {
+      console.error('RIDER DELIVERED EVENT FAILED:', eventResult.error);
+      await supabase
+        .from('deliveries')
+        .update({
+          status: STATUS.PICKED_UP,
+          delivered_at: null
+        })
+        .eq('id', delivery.id);
+
+      await sendWhatsAppMessage(from, '⚠️ The delivery completion could not be recorded completely. Please try again.');
+      return true;
+    }
+
+    const { error: riderUpdateError } =
+      await supabase
+        .from('riders')
+        .update({ status: 'available' })
+        .eq('id', rider.id);
+
+    if (riderUpdateError) {
+      console.error('RIDER AVAILABLE UPDATE ERROR:', riderUpdateError);
+    }
+
+    console.log('RIDER DELIVERED EVENT RECORDED:', delivery.id);
+
+    await sendWhatsAppMessage(
+      from,
+      `🎉 *Delivery Completed!*\n\n` +
+      `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
+      `👤 Customer: ${delivery.customer_name}\n` +
+      `📌 Status: *DELIVERED*\n\n` +
+      `Thank you, ${rider.name}! You are now marked as *AVAILABLE* for the next delivery. 🛵`
+    );
+
+    return true;
+  }
+
+  return false;
+}
+
 app.post('/api/whatsapp/webhook', async (req, res) => {
   console.log('');
   console.log('========================================');
@@ -1533,193 +1803,43 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
     for (const entry of body?.entry || []) {
       for (const change of entry?.changes || []) {
         for (const message of change?.value?.messages || []) {
+          const from = normalizePhone(message?.from);
+
+          if (!from) continue;
+
+          if (message?.type === 'interactive' && message?.interactive?.type === 'button_reply') {
+            const buttonId = message.interactive.button_reply?.id;
+            console.log('WhatsApp button reply:', buttonId);
+
+            try {
+              const handled = await handleRiderButtonAction(from, buttonId || '');
+              if (!handled) {
+                console.log('Unhandled WhatsApp button:', buttonId);
+              }
+            } catch (buttonError) {
+              console.error('WHATSAPP BUTTON ERROR:', buttonError);
+              try {
+                await sendWhatsAppMessage(from, '⚠️ Something went wrong while processing that button. Please try again.');
+              } catch (sendError) {
+                console.error('WHATSAPP BUTTON ERROR RESPONSE FAILED:', sendError);
+              }
+            }
+            continue;
+          }
+
           if (message?.type !== 'text') {
             console.log('Ignoring non-text WhatsApp message:', message?.type);
             continue;
           }
 
-          const from = normalizePhone(message?.from);
           const text = message?.text?.body?.trim();
 
           console.log('WhatsApp sender:', from);
           console.log('WhatsApp message:', text);
 
-          if (!from || !text) continue;
+          if (!text) continue;
 
           try {
-            /* -----------------------------------------
-               RIDER PICKED-UP COMMAND
-            ----------------------------------------- */
-
-            const pickedCommand =
-              text.match(/^PICKED\s+(.+)$/i);
-
-            if (pickedCommand) {
-              const deliveryCode =
-                pickedCommand[1].trim();
-
-              console.log(
-                'RIDER PICKED COMMAND:',
-                {
-                  riderPhone: from,
-                  deliveryCode
-                }
-              );
-
-              const {
-                data: delivery,
-                error: deliveryLookupError
-              } = await supabase
-                .from('deliveries')
-                .select(`
-                  *,
-                  rider:riders(
-                    id,
-                    name,
-                    phone,
-                    status
-                  )
-                `)
-                .eq('delivery_code', deliveryCode)
-                .single();
-
-              if (deliveryLookupError || !delivery) {
-                console.error(
-                  'RIDER PICKED DELIVERY LOOKUP ERROR:',
-                  deliveryLookupError
-                );
-
-                await sendWhatsAppMessage(
-                  from,
-                  `⚠️ I couldn't find delivery *${deliveryCode}*.\n\nPlease check the delivery code and try again.`
-                );
-                continue;
-              }
-
-              if (!delivery.rider) {
-                await sendWhatsAppMessage(
-                  from,
-                  `⚠️ Delivery *${deliveryCode}* has not been assigned to a rider yet.`
-                );
-                continue;
-              }
-
-              if (
-                normalizePhone(delivery.rider.phone) !== from
-              ) {
-                console.error(
-                  'RIDER PICKED PHONE MISMATCH:',
-                  {
-                    deliveryCode,
-                    riderPhone: from,
-                    assignedRiderPhone: normalizePhone(
-                      delivery.rider.phone
-                    )
-                  }
-                );
-
-                await sendWhatsAppMessage(
-                  from,
-                  `⚠️ This delivery is assigned to another rider.`
-                );
-                continue;
-              }
-
-              if (delivery.status !== STATUS.ASSIGNED) {
-                await sendWhatsAppMessage(
-                  from,
-                  `ℹ️ Delivery *${deliveryCode}* is currently *${String(
-                    delivery.status || ''
-                  ).toUpperCase()}*.\n\nOnly an assigned delivery can be marked as picked up.`
-                );
-                continue;
-              }
-
-              const pickedUpAt =
-                new Date().toISOString();
-
-              const {
-                data: updatedDelivery,
-                error: pickupUpdateError
-              } = await supabase
-                .from('deliveries')
-                .update({
-                  status: STATUS.PICKED_UP,
-                  picked_up_at: pickedUpAt
-                })
-                .eq('id', delivery.id)
-                .select(`
-                  *,
-                  rider:riders(
-                    id,
-                    name,
-                    phone,
-                    status
-                  )
-                `)
-                .single();
-
-              if (pickupUpdateError || !updatedDelivery) {
-                console.error(
-                  'RIDER PICKED UPDATE ERROR:',
-                  pickupUpdateError
-                );
-
-                await sendWhatsAppMessage(
-                  from,
-                  `⚠️ I couldn't mark delivery *${deliveryCode}* as picked up.\n\nPlease try again.`
-                );
-                continue;
-              }
-
-              const pickupEvent =
-                await recordEvent(
-                  updatedDelivery.id,
-                  STATUS.PICKED_UP,
-                  'whatsapp',
-                  `Picked up by ${delivery.rider.name}`
-                );
-
-              if (pickupEvent.error) {
-                console.error(
-                  'PICKED-UP EVENT FAILED:',
-                  pickupEvent.error
-                );
-
-                await supabase
-                  .from('deliveries')
-                  .update({
-                    status: STATUS.ASSIGNED,
-                    picked_up_at: null
-                  })
-                  .eq('id', delivery.id);
-
-                await sendWhatsAppMessage(
-                  from,
-                  `⚠️ The pickup could not be completed because the delivery event could not be recorded.\n\nPlease try again.`
-                );
-                continue;
-              }
-
-              console.log(
-                'RIDER PICKED-UP EVENT RECORDED:',
-                updatedDelivery.id
-              );
-
-              await sendWhatsAppMessage(
-                from,
-                `✅ *Delivery Picked Up*\n\n` +
-                `🆔 Delivery Code: *${deliveryCode}*\n` +
-                `👤 Customer: ${updatedDelivery.customer_name}\n` +
-                `📍 Location: ${updatedDelivery.delivery_address}\n` +
-                `📦 Item: ${updatedDelivery.item_description}\n` +
-                `📌 Status: *PICKED UP*\n\n` +
-                `Please proceed to the delivery location and update Reflex when the delivery is completed.`
-              );
-
-              continue;
-            }
-
             let session = whatsappSessions.get(from);
 
             if (!session || isStartCommand(text)) {
