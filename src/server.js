@@ -1,5 +1,6 @@
-Reflex Delivery System — server.js (Picked Up Update)
+/*Reflex Delivery System — server.js (Picked Up Update)
 Based on server_fixed_copy_NEXT_DELIVERY_READY_RIDER_NOTIFICATION_EVENT_FIX.docx. Adds rider WhatsApp PICKED command handling while preserving existing delivery, assignment, event, and WhatsApp flows.
+*/
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
