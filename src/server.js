@@ -1,4 +1,5 @@
-
+Reflex Delivery System — server.js (Picked Up Update)
+Based on server_fixed_copy_NEXT_DELIVERY_READY_RIDER_NOTIFICATION_EVENT_FIX.docx. Adds rider WhatsApp PICKED command handling while preserving existing delivery, assignment, event, and WhatsApp flows.
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -1545,6 +1546,179 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
           if (!from || !text) continue;
 
           try {
+            /* -----------------------------------------
+               RIDER PICKED-UP COMMAND
+            ----------------------------------------- */
+
+            const pickedCommand =
+              text.match(/^PICKED\s+(.+)$/i);
+
+            if (pickedCommand) {
+              const deliveryCode =
+                pickedCommand[1].trim();
+
+              console.log(
+                'RIDER PICKED COMMAND:',
+                {
+                  riderPhone: from,
+                  deliveryCode
+                }
+              );
+
+              const {
+                data: delivery,
+                error: deliveryLookupError
+              } = await supabase
+                .from('deliveries')
+                .select(`
+                  *,
+                  rider:riders(
+                    id,
+                    name,
+                    phone,
+                    status
+                  )
+                `)
+                .eq('delivery_code', deliveryCode)
+                .single();
+
+              if (deliveryLookupError || !delivery) {
+                console.error(
+                  'RIDER PICKED DELIVERY LOOKUP ERROR:',
+                  deliveryLookupError
+                );
+
+                await sendWhatsAppMessage(
+                  from,
+                  `⚠️ I couldn't find delivery *${deliveryCode}*.\n\nPlease check the delivery code and try again.`
+                );
+                continue;
+              }
+
+              if (!delivery.rider) {
+                await sendWhatsAppMessage(
+                  from,
+                  `⚠️ Delivery *${deliveryCode}* has not been assigned to a rider yet.`
+                );
+                continue;
+              }
+
+              if (
+                normalizePhone(delivery.rider.phone) !== from
+              ) {
+                console.error(
+                  'RIDER PICKED PHONE MISMATCH:',
+                  {
+                    deliveryCode,
+                    riderPhone: from,
+                    assignedRiderPhone: normalizePhone(
+                      delivery.rider.phone
+                    )
+                  }
+                );
+
+                await sendWhatsAppMessage(
+                  from,
+                  `⚠️ This delivery is assigned to another rider.`
+                );
+                continue;
+              }
+
+              if (delivery.status !== STATUS.ASSIGNED) {
+                await sendWhatsAppMessage(
+                  from,
+                  `ℹ️ Delivery *${deliveryCode}* is currently *${String(
+                    delivery.status || ''
+                  ).toUpperCase()}*.\n\nOnly an assigned delivery can be marked as picked up.`
+                );
+                continue;
+              }
+
+              const pickedUpAt =
+                new Date().toISOString();
+
+              const {
+                data: updatedDelivery,
+                error: pickupUpdateError
+              } = await supabase
+                .from('deliveries')
+                .update({
+                  status: STATUS.PICKED_UP,
+                  picked_up_at: pickedUpAt
+                })
+                .eq('id', delivery.id)
+                .select(`
+                  *,
+                  rider:riders(
+                    id,
+                    name,
+                    phone,
+                    status
+                  )
+                `)
+                .single();
+
+              if (pickupUpdateError || !updatedDelivery) {
+                console.error(
+                  'RIDER PICKED UPDATE ERROR:',
+                  pickupUpdateError
+                );
+
+                await sendWhatsAppMessage(
+                  from,
+                  `⚠️ I couldn't mark delivery *${deliveryCode}* as picked up.\n\nPlease try again.`
+                );
+                continue;
+              }
+
+              const pickupEvent =
+                await recordEvent(
+                  updatedDelivery.id,
+                  STATUS.PICKED_UP,
+                  'whatsapp',
+                  `Picked up by ${delivery.rider.name}`
+                );
+
+              if (pickupEvent.error) {
+                console.error(
+                  'PICKED-UP EVENT FAILED:',
+                  pickupEvent.error
+                );
+
+                await supabase
+                  .from('deliveries')
+                  .update({
+                    status: STATUS.ASSIGNED,
+                    picked_up_at: null
+                  })
+                  .eq('id', delivery.id);
+
+                await sendWhatsAppMessage(
+                  from,
+                  `⚠️ The pickup could not be completed because the delivery event could not be recorded.\n\nPlease try again.`
+                );
+                continue;
+              }
+
+              console.log(
+                'RIDER PICKED-UP EVENT RECORDED:',
+                updatedDelivery.id
+              );
+
+              await sendWhatsAppMessage(
+                from,
+                `✅ *Delivery Picked Up*\n\n` +
+                `🆔 Delivery Code: *${deliveryCode}*\n` +
+                `👤 Customer: ${updatedDelivery.customer_name}\n` +
+                `📍 Location: ${updatedDelivery.delivery_address}\n` +
+                `📦 Item: ${updatedDelivery.item_description}\n` +
+                `📌 Status: *PICKED UP*\n\n` +
+                `Please proceed to the delivery location and update Reflex when the delivery is completed.`
+              );
+
+              continue;
+            }
+
             let session = whatsappSessions.get(from);
 
             if (!session || isStartCommand(text)) {
