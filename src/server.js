@@ -927,7 +927,7 @@ app.post(
          RECORD ASSIGNMENT
       ----------------------------------------- */
 
-      await recordEvent(
+      const assignmentEvent = await recordEvent(
 
         delivery.id,
 
@@ -938,6 +938,18 @@ app.post(
         `Assigned to ${rider.name}`
 
       );
+
+      if (assignmentEvent?.error) {
+        console.error(
+          'ASSIGNMENT EVENT FAILED:',
+          assignmentEvent.error
+        );
+      } else {
+        console.log(
+          'ASSIGNMENT EVENT RECORDED:',
+          delivery.id
+        );
+      }
 
 
       /* -----------------------------------------
@@ -968,6 +980,60 @@ app.post(
         console.error(
           'RIDER BUSY UPDATE ERROR:',
           riderUpdateError
+        );
+
+      }
+
+
+      /* -----------------------------------------
+         SEND RIDER WHATSAPP NOTIFICATION
+      ----------------------------------------- */
+
+      try {
+
+        if (rider.phone) {
+
+          const riderWhatsAppPhone =
+            normalizePhone(rider.phone);
+
+          console.log(
+            'RIDER WHATSAPP NOTIFICATION:',
+            {
+              rider: rider.name,
+              phone: riderWhatsAppPhone,
+              deliveryCode: delivery.delivery_code
+            }
+          );
+
+          await sendWhatsAppMessage(
+            riderWhatsAppPhone,
+            `🛵 *New Reflex Delivery Assignment*\n\n` +
+            `🆔 Delivery Code: *${delivery.delivery_code}*\n` +
+            `👤 Customer: ${delivery.customer_name}\n` +
+            `📱 Customer Phone: ${delivery.customer_phone}\n` +
+            `📍 Delivery Location: ${delivery.delivery_address}\n` +
+            `📦 Item: ${delivery.item_description}\n` +
+            `📌 Status: *ASSIGNED*\n\n` +
+            `Please collect the delivery and update Reflex when you have picked it up.`
+          );
+
+          console.log(
+            'RIDER WHATSAPP NOTIFICATION SENT'
+          );
+
+        } else {
+
+          console.log(
+            'Rider has no phone number. WhatsApp notification skipped.'
+          );
+
+        }
+
+      } catch (error) {
+
+        console.error(
+          'RIDER WHATSAPP NOTIFICATION ERROR:',
+          error.message
         );
 
       }
